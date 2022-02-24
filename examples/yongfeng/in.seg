@@ -1,0 +1,84 @@
+# SPPARKS application RPV input  
+
+  #seed	        ${SEED}  
+  seed	        12535 
+
+# define if 1NN or 2NN interaction 
+  app_style       seg 1 0  
+
+  lattice         fcc 1.0
+  region	  box block -10 10 -10 10 -80 80  
+#  read_sites      100.in 
+
+  create_box	box
+  create_sites	box value i1 1
+
+# set the integers per site to define the composition, etc. 
+# i2 value the elements: vac, int, ce1, ce2, ..., ce8
+  set           i2 value 0 
+  set           i2 value 2 if i1 = 1 # matrix: ce1 
+  set           i2 value 3 if i2 = 2 fraction 0.085  # Ni: ce2 weight percent 0.89
+  set           i2 value 4 if i2 = 2 fraction 0.20   # Cr: ce3 weight percent 17.33
+  # set           i2 value 5 if i1 = 1 fraction 0.00122  # Y: ce4
+  # set           i2 value 0 if i1 = 1 number 1 # Vacancy: VAC  
+  # set           i2 value 1 if i1 = 1 number 100 # interstitial: INT  
+ 
+# initialize the two integers for dumbbell atoms, all 0 to start 
+  set           i3 value 0 
+  set           i4 value 0
+
+# solving method 
+  # sector          yes nstop 1 
+  sector          no
+  solve_style     tree 
+
+# define 1NN and 2NN (optional) bond energy 
+# ebond1 for 1NN; ebond2 for 2NN
+# in the order of: 11 12 ... 1N; 21 22 ... 2N; ...; NN 
+
+  ebond1          5	 0 0 0 0 0	0 0 0 0		0 0 0	0 0 	0     
+
+# define migration barrier 
+# vac (useless), int, ce1, ce2, ..., ce8           
+  migbarrier      10.0 0.2 0.74 0.89 0.57    
+
+# strength, shape, location[3], normal, radius, segment  
+# shape: 1 line; 2 polygon; 3 planar, 4 spherical 
+# id of the first sink is 1, second 2, ...
+
+  sink            0.1  3  0 0 0  2  5.0  40 
+
+# sink interaction defines the interaction between sinks and elements 
+# element, sink_id, inteaction strength (<-100, absorption; 0.0: no interaction 
+
+  sink_interaction 0 1 -101 2.0 
+  sink_interaction 1 1 -101 2.0 
+
+# Thermal segregation element, sink_id, segregation energy 
+# sink_interaction 1 1 -1.0  
+# sink motion: sink_id, sink_dr (0 for x, 1 for y, 2 for z), sink_velociry (a0/s) 
+
+  sink_motion     1 2 0.1 
+
+# rsite rinput routput rbarrier rrate rtarget  
+
+  # reaction        1  1 2  1.84  1.0e+8  10 
+
+# calris calculating total segregation 
+  calris  2 0.73  3 0.085  4 0.185 
+
+# dpa/second 
+  frenkelpair       5.5e-3 
+  #frenkelpair       5.5e-3 0 0.001 2 
+
+# temperature in units of Kelvin  
+  temperature	  773 
+
+# output 
+  diag_style      seg stats yes list energy vac int ce1 ce2 ce3 ris2 ris3 ris4 nfp recombine  
+  stats           1e12    
+  dump            1 text 1e14 *.dump id i2 x y z 
+
+# total simulation steps 
+  reset_time      0
+  run             1e16
