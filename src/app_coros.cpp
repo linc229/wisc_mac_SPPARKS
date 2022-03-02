@@ -729,15 +729,39 @@ double Appcoros::site_propensity(int i)
   if (element[i] != VACANCY) return prob_reaction;
 */
   //nothing happen in salt region, for skipping event 3
-  //need to add surface diffusion in the future
+  //disable diffusion in salt region
   if(type[i]==3){return prob_reaction; //error here because it return nothing, but this function should return double
   }
 
-  // for hop event, only vac at bulk region can diffuse
-  // now enable adatom at interface can diffuse
+  // for hop event previous, only vac at bulk region can diffuse
+  // disable bulk metal to diffuse
   if (element[i] != VACANCY && type[i] != 2) return prob_reaction; //disable bulk metal to diffuse
-  if (type[i] == 2 && type[j] == 1) return prob_reaction; // disable surface metal diffuse with bulk atom
-  int k, kd;
+
+  int k1, k2, j1, j2;
+  // surface diffusion
+  // enable adatom at interface can diffuse
+  if (type[i]==2){
+    for (k1 = 0; k1 < numneigh[i]; k1++){
+      j1 = neighbor[i][k1]; // site j1 = neighbor of site i
+      // disable adatom to diffuse with bulk region to prevent double diffusion
+      if (type[j1] == 3) { // allow surface diffuse with vac at salt region
+        for (k2 = 0; k2 < numneigh[j1]; k2 ++){
+          j2 = neighbor[j1][k2]; // site j2 = neighbor of site j1
+          if (j2 != i && element[j2] ==1){ // if j1 has at least 2 neighbor atom then enable surfac diffuse
+            ebarrier = site_SP_energy(i,j1,engstyle); // diffusion barrier
+            hpropensity = exp(-ebarrier/KBT);
+            add_event(i,j1,1,-1,hpropensity);
+            prob_hop += hpropensity;
+            //return prob_hop + prob_reaction;
+
+      }
+
+
+        }
+      }
+    }
+  }
+  /*
   if (type[i] == 2){
     for (k = 0; k < numneigh[j]; k++){
       kd = neighbor[j][k];
@@ -745,9 +769,8 @@ double Appcoros::site_propensity(int i)
         break; // if the site j has one more metal in neighbor, then enable surface diffusion
       }else{return prob_reaction;}
     }
-
-
   }
+  */
   // check if acceleration is needed and update propensity if so
   /*
   if (acceleration_flag == 1 ) {
@@ -870,10 +893,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
       target_local[ii] --;
     }
   }
-// update type and reassign metal, interface and salt regions
-// for diffusion check and reaction check
-// update_region include subclass update_region_loop
-update_region(i, j, rstyle);
+
 
 
   // perform zero_barrier events: absorption and recombination
@@ -950,7 +970,10 @@ update_region(i, j, rstyle);
     }
     */
   }
-
+  // update type and reassign metal, interface and salt regions
+  // for diffusion check and reaction check
+  // update_region include subclass update_region_loop
+  update_region(i, j, rstyle);
   // compute propensity changes for participating sites i & j and their neighbors
   update_propensity(i);
   update_propensity(j);
@@ -2734,6 +2757,20 @@ void Appcoros::update_region(int i,int j, int r)
       update_list[1] = i;
       n_update_list = 2;
     }
+
+    // for surface diffusion
+    if(element[i] == 2 && element[j] == 1 && type[i] == 2 && type[j] == 3){
+      type[i] = 3;
+      type[j] = 2;
+      //if (element[i] == 2 && element[j] == 1 && type[i] == 2 && type[j] == 3) error->all(FLERR,"Stop");
+      update_list[0] = j;
+      update_list[1] = i;
+      n_update_list = 2;
+      while (n_update_list != 0){
+      n_update_list = update_surface_diff(n_update_list);
+    }
+    }
+
     /*comment event 3 now, need to check in the future
       else if(element[i] == 2 && type[i] == 2 && type[j] == 3){//diffusion from salt to surface
       type[i] = 3;
@@ -2765,6 +2802,7 @@ int Appcoros::update_neighbor_check(int l)
   //neighbor_list = NULL // for temparary contain list
   int num_list = 0;
   int k,m,kd;
+  int n;
 //check the neighbor of each lists
   for (k = 0; k<n_update_list; k++){
     for (m = 0; m < numneigh[update_list[k]] ; m++){
@@ -2777,8 +2815,35 @@ int Appcoros::update_neighbor_check(int l)
       else if(element[kd] == 1 && type[kd] == 1){ //set bulk region as interface
         type[kd] = 2;
     }
-  }
+    }
+
   return num_list;
 }
 
+}
+
+/* ----------------------------------------------------------------------
+  update region check for surface diffusion
+------------------------------------------------------------------------- */
+int Appcoros::update_surface_diff(int i){
+int num_list = 0;
+int k,m,kd;
+int n;
+//check the neighbor of each lists
+for (k = 0; k<n_update_list; k++){
+  for (m = 0; m < numneigh[update_list[k]] ; m++){
+    kd = neighbor[update_list[k]][m];
+    if (element[kd] ==1){// reverse interface type to bulk type
+      for (n=0; n < numneigh[kd]; n++){
+        if(type[neighbor[kd][n]] == 3){
+          type[kd] =2;
+          break;
+        }else{
+          type[kd] = 1;
+      }
+    }
+}
+}
+}
+return num_list;
 }

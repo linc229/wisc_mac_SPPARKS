@@ -160,6 +160,7 @@ class Appcoros : public AppLattice {
   double real_time(double); //compute fvt
   void update_region(int i,int j, int r); // // update type after events
   int update_neighbor_check(int l); //update and return number of old list
+  int update_surface_diff(int i); // update surface diff
 
 };
 
