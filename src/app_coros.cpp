@@ -2,12 +2,10 @@
    SPPARKS - Stochastic Parallel PARticle Kinetic Simulator
    http://www.cs.sandia.gov/~sjplimp/spparks.html
    Steve Plimpton, sjplimp@sandia.gov, Sandia National Laboratories
-
    Copyright (2008) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
    certain rights in this software.  This software is distributed under
    the GNU General Public License.
-
    See the README file in the top-level SPPARKS directory.
 *************************************************************************************
    This application does the vacancy diffusion in coros steel, via hop in a BCC lattice
@@ -257,29 +255,23 @@ void Appcoros::input_app(char *command, int narg, char **arg)
   // time intervals used to estimate solute trapping
   /*
   else if (strcmp(command, "time_tracer") ==0) {
-
     if (narg < 1 ) error->all(FLERR,"Illegal time_tracer command");
     time_flag = 1;
     dt_interval = atof(arg[0]);
   }
-
   // type of solutes that trap vacancy and need acceleration
   else if (strcmp(command, "acceleration") ==0) {
-
     acceleration_flag = 1;
     memory->create(trap_type,nelement+1,"app/coros:trap_type");
     if (narg < 1 ) error->all(FLERR,"Illegal acceleration command");
-
     ntrap = 0;
     while(ntrap < narg) {
       trap_type[ntrap] = atoi(arg[ntrap]);
       ntrap ++;
     }
   }
-
   // elastic moduli for stress calculation
   else if (strcmp(command, "moduli") ==0) {
-
     moduli_flag = 1;
     if(narg != 5) error->all(FLERR,"illegal moduli command");
     c11 = atof(arg[0]);
@@ -288,10 +280,8 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     ninteg = atoi(arg[3]);
     dcore = atof(arg[4]);
   }
-
   // calculating stress field of dislocations or loops
   else if (strcmp(command, "dislocation") ==0) {
-
     if(narg < 8 || moduli_flag == 0) error->all(FLERR,"illegal dislocation command");
     if(dislocation_flag == 0) {
       memory->create(stress,nlattice,6,"app/coros:stress");
@@ -299,10 +289,8 @@ void Appcoros::input_app(char *command, int narg, char **arg)
         for(j = 0; j < 6; j++) stress[i][j] = 0;
       }
     }
-
     dislocation_flag = 1;
     grow_dislocations();
-
     // dislocation type, 1 straight, others loop
     dislocation_type[ndislocation] = atoi(arg[0]);
     burgers[ndislocation][0] = atof(arg[1]); //burgers vector
@@ -312,39 +300,30 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     xdislocation[ndislocation][1] = atof(arg[5]);
     xdislocation[ndislocation][2] = atof(arg[6]);
     line_vector[ndislocation] = atoi(arg[7]); //line vector or plane normal for loop, X(0) or Y(1) or Z(2) only
-
     // extra parameters for loops
     if(narg > 8) {
       dislocation_radius[ndislocation] = atof(arg[8]); //loop radius, for loop only
       nsegment[ndislocation] = atoi(arg[9]); //loop segments(shape), for loop only
     }
-
     // compute the stress field
     stress_field(ndislocation);
     ndislocation ++;
   }
-
   // elastic interaction with stress field
   else if (strcmp(command, "elastic_interaction") ==0) {
-
     elastic_flag = 1;
     if(narg < 2 || dislocation_flag == 0) error->all(FLERR,"illegal elastic interaction command");
-
     int iarg = 0;
     int itype = 0;
-
     for (i = 1; i <= nelement; i++ ) evol[i] = 0.0;
-
     while(iarg < narg) {
       itype = atoi(arg[iarg]);
       evol[itype] = atof(arg[iarg+1]);
       iarg += 2;
     }
   }
-
   // define sinks to defects, could be dislocations or interfaces or 3D regions
   else if (strcmp(command, "sink") ==0) {
-
     if(narg != 10) error->all(FLERR,"illegal sink command");
     if(sink_flag == 0) {
       memory->create(isink, nlattice, nelement,"app/coros:isink");
@@ -352,10 +331,8 @@ void Appcoros::input_app(char *command, int narg, char **arg)
         for(j = 0; j < nelement; j++)  isink[i][j] = 0;
       }
     }
-
     sink_flag = 1;
     grow_sinks();
-
     sink_type[nsink] = atoi(arg[0]); // sink to certain element
     sink_strength[nsink] = atof(arg[1]); // thickness of sink
     sink_shape[nsink] = atoi(arg[2]); // 1 dislocation, 2 interface, 3 3D region
@@ -367,7 +344,6 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     sink_segment[nsink] = atoi(arg[8]); // # of segment for polygon sinks
     sink_mfp[nsink] = atof(arg[9]); // mean free path in this sink
     nabsorption[nsink] = 0; // initialize number of absorptions
-
     sink_creation(nsink); //create the nth sink, can overlap with other sinks
     nsink ++;
   }
@@ -389,19 +365,28 @@ void Appcoros::input_app(char *command, int narg, char **arg)
 
     nreaction ++;
   }
+  else if (strcmp(command, "surfacebarrier") ==0) {
+
+    if (narg < 2 || narg % 2 != 0) error->all(FLERR,"Illegal surfacebarrier command");
+    barrierflag = 1;
+    memory->create(surfbarrier,nelement+1,"app/coros:surfbarrier");
+
+    for (i=0; i<narg-1; i++) {
+      if(i % 2 == 0){ j = atoi(arg[i]);
+        surfbarrier[j] = atof(arg[i+1]);
+      }
+    }
+  }
+
 /*
   else if (strcmp(command, "ballistic") ==0) {
-
     if(narg < 2) error->all(FLERR,"illegal ballistic command");
     ballistic_flag = 1;
     grow_ballistic();
-
     bfreq[nballistic] = atoi(arg[0]); // mix rate
     rdamp[nballistic] = atof(arg[1]); // mix range
     if(min_bfreq > bfreq[nballistic]) min_bfreq = bfreq[nballistic];
-
     nballistic ++; // number of mixing events
-
   }
 */
   else error->all(FLERR,"Unrecognized command");
@@ -543,7 +528,6 @@ void Appcoros::init_app()
        time_new[i] = 0;
     }
   }
-
   // initialize the time_list for ballistic mixing
   if(diffusionflag) {
     for(i = 0; i < ndiffusion; i ++) {
@@ -552,7 +536,6 @@ void Appcoros::init_app()
       }
     }
   }
-
   // initialize the time_list for ballistic mixing
   if(concentrationflag) {
     for(i = ndiffusion; i < ndiffusion + concentrationflag; i ++) {
@@ -561,7 +544,6 @@ void Appcoros::init_app()
       }
     }
   }
-
   // initiate parameters for vacancy trapping
   if(time_flag) {
     double nprcs = (double)(domain->nprocs);
@@ -623,6 +605,7 @@ double Appcoros::sites_energy(int i, int estyle)
     }
   }
 
+
   return eng/2.0;
 }
 
@@ -634,10 +617,8 @@ double Appcoros::elastic_energy(int i, int itype)
 {
   double eng = 0.0;
   double pressure = 0.0;
-
   pressure = -(stress[i][0] + stress[i][1] + stress[i][2])/3.0;
   eng = pressure * evol[itype];
-
   return eng;
 }
 */
@@ -651,29 +632,28 @@ double Appcoros::site_SP_energy(int i, int j, int estyle)
   double eng0i, eng0j, eng1i, eng1j; //energy before and after jump
   int iele = element[i];
   int jele = element[j];
-
   eng0i = sites_energy(i,estyle); //broken bond with i initially,
   eng0j = sites_energy(j,estyle); //broken bond with j initially
-
   // switch the element and recalculate the site energy
   element[i] = jele;
   element[j] = iele;
   eng1i = sites_energy(i,estyle); //broken bond with i initially,
   eng1j = sites_energy(j,estyle); //broken bond with j initially
-
   // switch back
   element[j] = jele;
   element[i] = iele;
-
   //barrier = migbarrier + (eng_after - eng_before)/2.0;
   eng = mbarrier[element[j]] + (eng1i + eng1j - eng0i -eng0j);
-
+  //if starting atom is interface atom,
+  //barrier = surfbarrier[i] + (eng_after - eng_before)/2.0;
+  if(type[i] == 2){
+    eng = surfbarrier[element[i]] + (eng1i + eng1j - eng0i -eng0j);
+  }
   //add elastic contribution if applicable
   /* comment because assume no elastic interaction
   if(elastic_flag) {
     double eng_ei = elastic_energy(j,iele) - elastic_energy(i,iele);
     double eng_ej = elastic_energy(i,jele) - elastic_energy(j,jele);
-
     eng += (eng_ei + eng_ej)/2.0;
   }
 */
@@ -732,11 +712,9 @@ double Appcoros::site_propensity(int i)
   //disable diffusion in salt region
   if(type[i]==3){return prob_reaction; //error here because it return nothing, but this function should return double
   }
-
   // for hop event previous, only vac at bulk region can diffuse
   // disable bulk metal to diffuse
   if (element[i] != VACANCY && type[i] != 2) return prob_reaction; //disable bulk metal to diffuse
-
   int k1, k2, j1, j2;
   // surface diffusion
   // enable adatom at interface can diffuse
@@ -744,19 +722,25 @@ double Appcoros::site_propensity(int i)
     for (k1 = 0; k1 < numneigh[i]; k1++){
       j1 = neighbor[i][k1]; // site j1 = neighbor of site i
       // disable adatom to diffuse with bulk region to prevent double diffusion
+/* comment out now becuase it will diable all surface diffusion somehow
+      if(type[j1]==2){
+        return prob_reaction;
+      }
+      if(type[j1]==1){
+        return prob_reaction;
+      }
+*/
+
       if (type[j1] == 3) { // allow surface diffuse with vac at salt region
         for (k2 = 0; k2 < numneigh[j1]; k2 ++){
           j2 = neighbor[j1][k2]; // site j2 = neighbor of site j1
-          if (j2 != i && element[j2] ==1){ // if j1 has at least 2 neighbor atom then enable surfac diffuse
+          if (j2 != i && element[j2] != 2){ // if j1 has at least 2 neighbor atom then enable surfac diffuse
             ebarrier = site_SP_energy(i,j1,engstyle); // diffusion barrier
             hpropensity = exp(-ebarrier/KBT);
             add_event(i,j1,1,-1,hpropensity);
             prob_hop += hpropensity;
             //return prob_hop + prob_reaction;
-
-      }
-
-
+         }
         }
       }
     }
@@ -776,7 +760,6 @@ double Appcoros::site_propensity(int i)
   if (acceleration_flag == 1 ) {
      for (j = 0; j < numneigh[i]; j++) {
        jid = neighbor[i][j];
-
        for ( int k = 0; k < ntrap; k ++) {
           if (element[jid] == trap_type[k]) return add_acceleration_event(i,jid);
        }
@@ -910,7 +893,6 @@ void Appcoros::site_event(int i, class RandomPark *random)
             nabsorption[n] ++;
             nsites_local[k-1] --;
             element[j] = FE;
-
             // update reaction target number
             if(reaction_flag == 1) {
               for(ii = 0; ii < nreaction; ii++) {
@@ -931,10 +913,8 @@ void Appcoros::site_event(int i, class RandomPark *random)
         nrecombine ++;
         nsites_local[VACANCY-1] --;
         nsites_local[SIA-1] --;
-
         element[j] = FE;
         element[m] = FE;
-
         // update reaction target number
         if(reaction_flag == 1) {
           for(ii = 0; ii < nreaction; ii++) {
@@ -955,10 +935,8 @@ void Appcoros::site_event(int i, class RandomPark *random)
         nrecombine ++;
         nsites_local[VACANCY-1] --;
         nsites_local[SIA-1] --;
-
         element[i] = FE;
         element[m] = FE;
-
         // update reaction target number
         if(reaction_flag == 1) {
           for(ii = 0; ii < nreaction; ii++) {
@@ -1138,15 +1116,12 @@ double Appcoros::add_acceleration_event(int i, int j)
 {
   int ni,nj,nn,nid,njd;
   double pr,pl,texit,p1,p2,p3,p4,w1,w2,w3,w4,eb;
-
   ni = numneigh[i];
   nj = numneigh[j];
   double *hpi = new double[ni];
   double *hpj = new double[nj];
-
   w1 = w2 = w3 = w4 = 0.0;
   p1 = p2 = p3 = p4 = 0.0;
-
   nn = 0;
   w1 = exp(-site_SP_energy(i,j,engstyle)/KBT);
   for (int m = 0; m < ni; m ++) {
@@ -1160,12 +1135,10 @@ double Appcoros::add_acceleration_event(int i, int j)
       w2 += hpi[nn];
       nn ++;
   }
-
   int Ei = element[i];
   int Ej = element[j];
   element[i] = Ej;
   element[j] = Ei;
-
   nn = 0;
   w3 = exp(-site_SP_energy(j,i,engstyle)/KBT);
   for (int n = 0; n < nj; n ++) {
@@ -1179,18 +1152,15 @@ double Appcoros::add_acceleration_event(int i, int j)
       w4 += hpj[nn];
       nn ++;
   }
-
   p1 = w1 / (w1+w2);
   p2 = w2 / (w1+w2);
   p3 = w3 / (w3+w4);
   p4 = w4 / (w3+w4);
-
   double t1 = 1.0/(w1+w2);
   double t2 = 1.0/(w3+w4);
   texit = (p2*t1 + p2*t2*p1*p3 + p1*p4*t1 + p1*p4*t2)/(1-p1*p3)/(1-p1*p3);
   pl = p1 / (1-p1*p3);
   pr = p1*p4 / (1-p1*p3);
-
   // add site events
   nn = 0;
   for (int m = 0; m < ni; m ++) {
@@ -1201,7 +1171,6 @@ double Appcoros::add_acceleration_event(int i, int j)
       add_event(i,nid,3,j,hpi[nn]); // rstyle == 3 means exit left
       nn ++;
   }
-
   nn = 0;
   for (int n = 0; n < nj; n ++) {
       njd = neighbor[j][n];
@@ -1211,7 +1180,6 @@ double Appcoros::add_acceleration_event(int i, int j)
       add_event(i,njd,4,j,hpj[nn]); // rstyle == 4 means exit right
       nn ++;
   }
-
   element[i] = Ei;
   element[j] = Ej;
   return 1.0 / texit; // return the propensity
@@ -1612,7 +1580,6 @@ void Appcoros::grow_ballistic()
   memory->grow(pn_global,n,"app/coros:pn_global");
   memory->grow(xmix,n,m,"app/coros:xmix");
   memory->grow(pmix,n,nlocal,"app/coros:pmix");
-
 }
 */
 /* ----------------------------------------------------------------------
@@ -1630,35 +1597,28 @@ void Appcoros::sink_creation(int n)
   double dx,dij[3],rik,rjk,lprd[3];
   double radius = sink_radius[n];
   double strength = sink_strength[n]*sink_strength[n];
-
   // get periodicity and box length
   periodicity[0] = domain->xperiodic;
   periodicity[1] = domain->yperiodic;
   periodicity[2] = domain->zperiodic;
-
   lprd[0] = domain->xprd;
   lprd[1] = domain->yprd;
   lprd[2] = domain->zprd;
-
   // shape =1: straight line sink, e.g., dislocations
   if(shape == 1) {
     for(i = 0; i < nlattice; i++){
       for(j = 0; j < 3; j ++) {
         if(j != normal) dij[j] = xyz[i][j]-xsink[n][j];
         else dij[j] = 0.0;
-
         if(periodicity[j] && dij[j] >= lprd[j]/2.0) dij[j] -= lprd[j];
         if(periodicity[j] && dij[j] <= -lprd[j]/2.0) dij[j] += lprd[j];
       }
-
       dx = dij[0]*dij[0]+dij[1]*dij[1]+dij[2]*dij[2];
       if(dx < strength) isink[i][ntype-1] = 1;
     }
   }
-
   // circular or polygon sinks, e.g., dislocation loops
   else if (shape == 2) {
-
     if( segment == 0) {
       for(i = 0; i < nlattice; i++){
         dx = 0.0;
@@ -1668,25 +1628,20 @@ void Appcoros::sink_creation(int n)
           if(periodicity[j] && dij[j] <= -lprd[j]/2.0) dij[j] += lprd[j];
           if(j != normal) dx += dij[j]*dij[j];
         }
-
         rik = sqrt(dx);
         rjk = (rik-radius)*(rik-radius) + dij[normal]*dij[normal];
         if( rjk < strength) isink[i][ntype-1] = 1;
       }
     }
-
     else {
-
       if( segment < 4) error->all(FLERR,"wrong number of segment for polygon sinks");
       double pi = acos(-1.0);
       double theta = 2*pi/segment;
       double theta_xyz;
-
       int b = normal + 1;
       int c = b + 1;
       if( b > 2) b -= 3;
       if( c > 2) c -= 3;
-
       for(i = 0; i < nlattice; i++){
         dx = 0.0;
         for( j = 0; j < 3; j ++) {
@@ -1695,13 +1650,11 @@ void Appcoros::sink_creation(int n)
           if(periodicity[j] && dij[j] <= -lprd[j]/2.0) dij[j] += lprd[j];
           if(j != normal) dx += dij[j]*dij[j];
         }
-
         if(xyz[i][c] == 0 && xyz[i][b] >= 0) theta_xyz = 0.0;
         else if(xyz[i][c] == 0 && xyz[i][b] < 0) theta_xyz = pi;
         else if(xyz[i][b] == 0) theta_xyz = pi/2;
         else theta_xyz = atan(xyz[i][c] / xyz[i][b]);
         if ( theta_xyz < 0 ) theta_xyz += pi;
-
         int d = static_cast<int>(theta_xyz/theta);
         double phi = fabs(theta_xyz - (d+0.5)*theta);
         rik = sqrt(dx);
@@ -1710,7 +1663,6 @@ void Appcoros::sink_creation(int n)
       }
     }
   }
-
   // planar sinks, e.g., grain boundaries
   else if (shape == 3) {
     for(i = 0; i < nlattice; i++){
@@ -1720,7 +1672,6 @@ void Appcoros::sink_creation(int n)
       if(dx*dx < strength) isink[i][ntype-1] = 1;
     }
   }
-
   // 3D spherical sinks, e.g., precipitates
   else {
     for(i = 0; i < nlattice; i++){
@@ -1729,7 +1680,6 @@ void Appcoros::sink_creation(int n)
         if(periodicity[j] && dij[j] >= lprd[j]/2.0) dij[j] -= lprd[j];
         if(periodicity[j] && dij[j] <= -lprd[j]/2.0) dij[j] += lprd[j];
       }
-
       dx = dij[0]*dij[0]+dij[1]*dij[1]+dij[2]*dij[2];
       if(dx < strength) isink[i][ntype-1] = 1;
     }
@@ -1754,7 +1704,6 @@ void Appcoros::stress_dislocation(int n)
 { int i,j,k,l,ii;
   int nlattice = nlocal + nghost;
   int periodicity[3];
-
   double pix;
   double ni[3],m[3],nn[3][3],nm[3][3],nni[3][3];
   double temp1[3][3],temp2[3][3];
@@ -1762,29 +1711,22 @@ void Appcoros::stress_dislocation(int n)
   double sigma[3][3],stran[3][3],stres[3][3];
   double tvect[3],dij[3];
   double lprd[3];
-
   // get periodicity and box length
   periodicity[0] = domain->xperiodic;
   periodicity[1] = domain->yperiodic;
   periodicity[2] = domain->zperiodic;
-
   lprd[0] = domain->xprd;
   lprd[1] = domain->yprd;
   lprd[2] = domain->zprd;
-
   // calculate the elastic tensor
   elastic_tensor();
-
   for (i = 0; i < 3; i ++) {
     if(i == line_vector[n]) tvect[i] = 1.0;
     else tvect[i] = 0.0;
   }
-
   pix = acos(-1.0);
-
   vector_normalize(tvect);
   stroh(tvect,qmatx,bmatx,smatx);
-
   // calculate stress at each lattice site
   for( int natom = 0; natom < nlattice; natom ++) {
     for( j = 0; j < 3; j ++) {
@@ -1792,27 +1734,20 @@ void Appcoros::stress_dislocation(int n)
       if(periodicity[j] && dij[j] > lprd[j]/2.0) dij[j] -= lprd[j];
       if(periodicity[j] && dij[j] <= -lprd[j]/2.0) dij[j] += lprd[j];
     }
-
     double norm = dij[0]*tvect[0] + dij[1]*tvect[1] + dij[2]*tvect[2];
     for(i = 0; i < 3; i ++) m[i] = dij[i] - tvect[i]*norm;
-
     double d = sqrt(m[0]*m[0] + m[1]*m[1] + m[2]*m[2]);
-
     if(d == 0.0) {
       for(i = 0; i < 6; i ++) stress[natom][i] = 0.0;
     } else {
-
       vector_normalize(m);
-
       cross_product(tvect,m,ni);
-
       for(j = 0; j < 3; j ++) {
         for(k = 0; k < 3; k ++) {
           nn[j][k] = 0.0;
           nm[j][k] = 0.0;
         }
       }
-
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) {
           for(k = 0; k < 3; k ++) {
@@ -1823,9 +1758,7 @@ void Appcoros::stress_dislocation(int n)
           }
         }
       }
-
       matrix_inversion(nn,nni);
-
       // inteimediate matrices
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) {
@@ -1835,7 +1768,6 @@ void Appcoros::stress_dislocation(int n)
           }
        }
       }
-
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) {
           temp2[i][j] = 0.0;
@@ -1844,7 +1776,6 @@ void Appcoros::stress_dislocation(int n)
           }
         }
       }
-
       // form sigma angular
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) {
@@ -1853,7 +1784,6 @@ void Appcoros::stress_dislocation(int n)
           stres[i][j] = 0.0;
         }
       }
-
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) {
           for(k = 0; k < 3; k ++) {
@@ -1866,14 +1796,12 @@ void Appcoros::stress_dislocation(int n)
           }
         }
       }
-
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) {
           // stres[i][j] = sigma[i][j]/d;
           stres[i][j] = sigma[i][j]*d/(d*d + dcore*dcore); //stress converge at core distance
         }
       }
-
     // calculate strain and stress
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) {
@@ -1883,11 +1811,9 @@ void Appcoros::stress_dislocation(int n)
           }
         }
       }
-
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) {
           stres[i][j] = 0.0;
-
           for(k = 0; k < 3; k ++) {
             for(l = 0; l < 3; l ++) {
               stres[i][j] += cijkl[i][j][k][l]*stran[k][l];
@@ -1895,19 +1821,15 @@ void Appcoros::stress_dislocation(int n)
           }
         }
       }
-
       // record stress at lattice point
       stress[natom][0] = stres[0][0];
       stress[natom][1] = stres[1][1];
       stress[natom][2] = stres[2][2];
-
       stress[natom][3] = (stres[0][1]+stres[1][0])/2.0;
       stress[natom][4] = (stres[0][2]+stres[2][0])/2.0;
       stress[natom][5] = (stres[1][2]+stres[2][1])/2.0;
-
     }
   }
-
 }
 */
 /* ----------------------------------------------------------------------
@@ -1920,47 +1842,38 @@ void Appcoros::stress_loop(int n)
   int normal,nseg,iseg,jseg;
   int nlattice = nlocal + nghost;
   int periodicity[3];
-
   double pix,theta;
   double dij[3],xseg[40][3]; //maximum 40 segment to represent a circle
   double A[3],B[3],P[3];
   double bv[3],rloop;  // burgers vector and loop normal & radius
   double stres[3][3],sstres[3][3]; // stress tensor at lattice site
   double lprd[3];
-
   // get periodicity and box length
   periodicity[0] = domain->xperiodic;
   periodicity[1] = domain->yperiodic;
   periodicity[2] = domain->zperiodic;
-
   lprd[0] = domain->xprd;
   lprd[1] = domain->yprd;
   lprd[2] = domain->zprd;
-
   elastic_tensor();
-
   for(i = 0; i < 3; i ++) {
     bv[i] = burgers[n][i];
   }
-
   rloop = dislocation_radius[n];
   normal = line_vector[n];
   nseg = nsegment[n];
   pix = acos(-1.0);
   theta = 2*pix/nseg;
-
   int b = normal + 1;
   int c = b + 1;
   if( b > 2) b -= 3;
   if( c > 2) c -= 3;
-
   // get vertice at intersections of segments
   for (iseg = 0; iseg < nseg+1; iseg ++) {
     xseg[iseg][b] = rloop*cos(theta*iseg);
     xseg[iseg][c] = rloop*sin(theta*iseg);
     xseg[iseg][normal] = 0.0;
   }
-
   // calculate stress at each lattice site
   for( int natom = 0; natom < nlattice; natom ++) {
     for( j = 0; j < 3; j ++) {
@@ -1968,40 +1881,31 @@ void Appcoros::stress_loop(int n)
       if(periodicity[j] && dij[j] >= lprd[j]/2.0) dij[j] -= lprd[j];
       if(periodicity[j] && dij[j] <= -lprd[j]/2.0) dij[j] += lprd[j];
     }
-
     for( i = 0; i < 3; i++) {
       P[i] = dij[i];
       for( j = 0; j < 3; j ++) stres[i][j] = 0.0;
     }
-
     for( iseg = 0; iseg < nseg; iseg ++) {
       jseg = iseg+1;
       if(jseg == nseg) jseg = 0;
-
       for(i = 0; i < 3; i ++) {
         A[i] = xseg[iseg][i];
         B[i] = xseg[jseg][i];
-
         for( j = 0; j < 3; j ++) sstres[i][j] = 0.0;
       }
-
       seg_stress(A,B,P,bv,sstres);
-
       for(i = 0; i < 3; i ++) {
         for(j = 0; j < 3; j ++) stres[i][j] += sstres[i][j];
       }
     }
-
     // record stress at lattice point
     stress[natom][0] = stres[0][0];
     stress[natom][1] = stres[1][1];
     stress[natom][2] = stres[2][2];
-
     stress[natom][3] = (stres[0][1]+stres[1][0])/2.0;
     stress[natom][4] = (stres[0][2]+stres[2][0])/2.0;
     stress[natom][5] = (stres[1][2]+stres[2][1])/2.0;
   }
-
 }
 */
 /* ----------------------------------------------------------------------
@@ -2010,79 +1914,60 @@ void Appcoros::stress_loop(int n)
 /*
 void Appcoros::seg_stress( double A[3], double B[3], double P[3], double bv[3], double sstres[3][3])
 { int i,j;
-
   double xi[3],PA[3],PB[3],x[3],ni[3];
   double norm,eps,dotx,beta1,beta2;
   double tau1[3],tau2[3],m1[3],m2[3];
   double sigma1[3][3],sigma2[3][3],sigma_p1[3][3],sigma_p2[3][3];
-
   eps = 1.0e-6;
-
   for(i = 0; i < 3; i ++) {
     x[i] = 0.0;
     xi[i] = B[i] - A[i];
   }
   vector_normalize(xi);
-
   for(i = 0; i < 3; i ++) {
     PA[i] = P[i] - A[i];
     PB[i] = P[i] - B[i];
   }
-
   dotx = 0.0;
   for(i = 0; i < 3; i ++) dotx += PA[i]*xi[i];
   for(i = 0; i < 3; i ++) x[i] += PA[i] - dotx*xi[i];
-
   double normx = sqrt(x[0]*x[0] + x[1]*x[1] + x[2]*x[2]);
   // return zero if co-linear
   if(normx < eps) {
     for(i = 0; i < 3; i ++) {
       for(j = 0; j < 3; j ++) sstres[i][j] = 0.0;
     }
-
     return;
-
     // if normx < dcore, scale normx to dcore
   } else if (normx < dcore) {
-
     for(i = 0; i < 3; i ++) {
       PA[i] = dotx*xi[i] + x[i]*dcore/normx;
       PB[i] = PA[i] + A[i] - B[i];
     }
   }
-
   // ABP plane normal to ni
   vector_normalize(x);
-
   norm = sqrt(PA[0]*PA[0] + PA[1]*PA[1] + PA[2]*PA[2]);
   for(i = 0; i < 3; i ++) tau1[i] = PA[i]/norm;
-
   norm = sqrt(PB[0]*PB[0] + PB[1]*PB[1] + PB[2]*PB[2]);
   for(i = 0; i < 3; i ++) tau2[i] = PB[i]/norm;
-
   // ni & m1 & m2 vactor
   cross_product(xi,x,ni);
   cross_product(ni,tau1,m1);
   cross_product(ni,tau2,m2);
-
   // angles
   dotx = 0.0;
   for(i = 0; i < 3; i ++)  dotx += tau1[i]*xi[i];
   beta1 = acos(dotx);
-
   dotx = 0.0;
   for(i = 0; i < 3; i ++)  dotx += tau2[i]*xi[i];
   beta2 = acos(dotx);
-
   // Augular factors & stress factors
-
   sigma_A(tau1, m1, bv, sigma1);
   sigma_A(tau2, m2, bv, sigma2);
   sigma_P(tau1, ni, bv, sigma_p1);
   sigma_P(tau2, ni, bv, sigma_p2);
-
   // calculate the stress field due to AB segment
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
       sstres[i][j] = (cos(beta1)*sigma1[i][j] - cos(beta2)*sigma2[i][j])*normx/2
@@ -2105,25 +1990,19 @@ void Appcoros::sigma_A(double t[3], double m[3], double bv[3], double sigma[3][3
   double bpmat[3][3],qpmat[3][3],spmat[3][3];
   double nn[3][3],nm[3][3],nni[3][3];
   double temp[3][3],ma[3][3];
-
   pix = acos(-1.0);
   vector_normalize(t);
-
   cross_product(t,m,ni);
   vector_normalize(ni);
-
   // qpmatx,bpmatx,spmatx
   for(i = 0; i < 3; i ++) {
     nx[i] = ni[i];
     tx[i] = t[i];
   }
-
   stroh_p(tx,nx,qpmat,bpmat,spmat);
-
   // qmatx,bmatx,smatx
   for(i = 0; i < 3; i ++) tx[i] = t[i];
   stroh(tx,qmatx,bmatx,smatx);
-
   // nn & nm
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
@@ -2131,7 +2010,6 @@ void Appcoros::sigma_A(double t[3], double m[3], double bv[3], double sigma[3][3
       nm[i][j] = 0.0;
     }
   }
-
   for(j = 0; j < 3; j ++) {
     for(k = 0; k < 3; k ++) {
       for(i = 0; i < 3; i ++) {
@@ -2142,9 +2020,7 @@ void Appcoros::sigma_A(double t[3], double m[3], double bv[3], double sigma[3][3
       }
     }
   }
-
   matrix_inversion(nn,nni);
-
   //temporaty matrix ma
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
@@ -2152,23 +2028,19 @@ void Appcoros::sigma_A(double t[3], double m[3], double bv[3], double sigma[3][3
       for(k = 0; k < 3; k ++)  temp[i][j] += nm[i][k]*smatx[k][j];
     }
   }
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++)  temp[i][j] += bmatx[i][j];
   }
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
       ma[i][j] = 0.0 ;
       for(k = 0; k < 3; k ++)  ma[i][j] += nni[i][k]*temp[k][j];
     }
   }
-
   // calculate the angular stress factors
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++)  sigma[i][j] = 0.0;
   }
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
@@ -2181,7 +2053,6 @@ void Appcoros::sigma_A(double t[3], double m[3], double bv[3], double sigma[3][3
       }
     }
   }
-
 }
 */
 /* ----------------------------------------------------------------------
@@ -2190,22 +2061,18 @@ void Appcoros::sigma_A(double t[3], double m[3], double bv[3], double sigma[3][3
 /*
 void Appcoros::sigma_P(double t[3], double ni[3], double bv[3], double sigmap[3][3])
 { int i, j, k, l, ii;
-
   double pix;
   double nn[3][3],nm[3][3],nt[3][3],nni[3][3],mi[3];
   double bmatx[3][3],qmatx[3][3],smatx[3][3];
   double bpmat[3][3],qpmat[3][3],spmat[3][3];
   double temp1[3][3],temp2[3][3],temp3[3][3];
   double ma[3][3];
-
   pix = acos(-1.0);
   vector_normalize(t);
   vector_normalize(ni);
-
   cross_product(ni,t,mi);
   stroh_p(t,ni,qpmat,bpmat,spmat);
   stroh(t,qmatx,bmatx,smatx);
-
   // nn & nm
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
@@ -2214,7 +2081,6 @@ void Appcoros::sigma_P(double t[3], double ni[3], double bv[3], double sigmap[3]
       nt[i][j] = 0.0;
     }
   }
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
@@ -2226,9 +2092,7 @@ void Appcoros::sigma_P(double t[3], double ni[3], double bv[3], double sigmap[3]
       }
     }
   }
-
   matrix_inversion(nn,nni);
-
   // temporaty matrix ma
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
@@ -2236,31 +2100,25 @@ void Appcoros::sigma_P(double t[3], double ni[3], double bv[3], double sigmap[3]
       for(k = 0; k < 3; k ++)  temp1[i][j] += nt[i][k]*smatx[k][j];
     }
   }
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
       temp2[i][j] = 0.0 ;
       for(k = 0; k < 3; k ++)  temp2[i][j] += nm[i][k]*spmat[k][j];
     }
   }
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++)    temp3[i][j] = bpmat[i][j] + temp2[i][j] - temp1[i][j];
   }
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
       ma[i][j] = 0.0 ;
       for(k = 0; k < 3; k ++)  ma[i][j] += nni[i][k]*temp3[k][j];
     }
   }
-
   // calculate the angular stress factors
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++)    sigmap[i][j] = 0.0;
   }
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
@@ -2273,7 +2131,6 @@ void Appcoros::sigma_P(double t[3], double ni[3], double bv[3], double sigmap[3]
       }
     }
   }
-
 }
 */
 /* ----------------------------------------------------------------------
@@ -2287,12 +2144,9 @@ void Appcoros::stroh( double tvect[3], double qmatx[3][3], double bmatx[3][3], d
   double mvect[3],nvect[3],mmvect[3],nnvect[3];
   double nn[3][3],mm[3][3],nm[3][3],mn[3][3];
   double nni[3][3],nn2[3][3],nn3[3][3];
-
   pix = acos(-1.0);
   domega = 2*pix/ninteg;
-
   right_hand_coord(mvect,nvect,tvect);
-
   for(i = 0; i < 3; i ++) {
     for(j = 0; j < 3; j ++) {
       qmatx[i][j] = 0.0;
@@ -2300,9 +2154,7 @@ void Appcoros::stroh( double tvect[3], double qmatx[3][3], double bmatx[3][3], d
       bmatx[i][j] = 0.0;
     }
   }
-
   for(int integ = 0; integ < ninteg; integ ++) {
-
     for(i = 0; i < 3; i ++) {
       for(j = 0; j < 3; j ++) {
         nn[i][j] = 0.0;
@@ -2311,14 +2163,11 @@ void Appcoros::stroh( double tvect[3], double qmatx[3][3], double bmatx[3][3], d
         mm[i][j] = 0.0;
       }
     }
-
     omega = integ*domega;
-
     for(i = 0; i < 3; i ++) {
       mmvect[i] = mvect[i]*cos(omega)+nvect[i]*sin(omega);
       nnvect[i] = -mvect[i]*sin(omega)+nvect[i]*cos(omega);
     }
-
     // different with Bulent's version, double check
     for(i = 0; i < 3; i++) {
       for(j = 0; j < 3; j++) {
@@ -2331,14 +2180,10 @@ void Appcoros::stroh( double tvect[3], double qmatx[3][3], double bmatx[3][3], d
         }
       }
     }
-
-
     for(i = 0; i < 3; i++) {
       for(j = 0; j < 3; j++) mn[j][i] = nm[i][j];
     }
-
     matrix_inversion(nn,nni);
-
     // get nn2
     for(i = 0; i < 3; i++) {
       for(j = 0; j < 3; j++) {
@@ -2346,7 +2191,6 @@ void Appcoros::stroh( double tvect[3], double qmatx[3][3], double bmatx[3][3], d
         for(k = 0; k < 3; k++)  nn2[i][j] += nni[i][k]*nm[k][j];
       }
     }
-
     // get nn3
     for(i = 0; i < 3; i++) {
       for(j = 0; j < 3; j++) {
@@ -2354,7 +2198,6 @@ void Appcoros::stroh( double tvect[3], double qmatx[3][3], double bmatx[3][3], d
         for(k = 0; k < 3; k++)  nn3[i][j] -= mn[i][k]*nn2[k][j];
       }
     }
-
     // calculate qmatx, smatx and bmatx
     for(i = 0; i < 3; i++) {
       for(j = 0; j < 3; j++) {
@@ -2372,7 +2215,6 @@ void Appcoros::stroh( double tvect[3], double qmatx[3][3], double bmatx[3][3], d
 /*
 void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bpmat[3][3], double spmat[3][3])
 { int i,j,k,l,ii;
-
   double pix,value;
   double N1[3],M1[3],ni[3],mi[3];
   double domega,omega,omegas[100];
@@ -2382,20 +2224,15 @@ void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bp
   double F[3][3],Bi[3][3],Si[3][3],Qi[3][3];
   double temp1[3][3],temp2[3][3],temp3[3][3],temp4[3][3];
   double BP[9][100],SP[9][100],QP[9][100];
-
   pix = acos(-1.0);
-
   vector_normalize(t);
   vector_normalize(n0);
-
   for(i = 0; i < 3; i ++) N1[i] = n0[i];
   cross_product(N1,t,M1);
   stroh(t,qmatx,bmatx,smatx);
-
   // angles
   domega = 2.0*pix/ninteg;
   for(i = 0; i < ninteg+1; i ++)  omegas[i] = i*domega;
-
   for(i = 0; i < 9; i ++) {
     for(j = 0; j < ninteg+1; j ++) {
       BP[i][j] = 0.0;
@@ -2403,15 +2240,12 @@ void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bp
       QP[i][j] = 0.0;
     }
   }
-
   for(i = 0; i < ninteg+1; i ++) {
     omega = omegas[i];
-
     for(j = 0; j < 3; j ++) {
       mi[j] = M1[j]*cos(omega) + N1[j]*sin(omega);
       ni[j] = -M1[j]*sin(omega) + N1[j]*cos(omega);
     }
-
     for(ii = 0; ii < 3; ii ++) {
       for(j = 0; j < 3; j ++) {
         nn[ii][j] = 0.0;
@@ -2424,7 +2258,6 @@ void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bp
         tm[ii][j] = 0.0;
       }
     }
-
     for(ii = 0; ii < 3; ii ++){
       for(j = 0; j < 3; j ++){
         for(k = 0; k < 3; k ++){
@@ -2441,78 +2274,66 @@ void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bp
         }
       }
     }
-
     matrix_inversion(nn,nni);
-
     // define F matrix
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp1[j][k] = nt[j][k] + tn[j][k];
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp2[j][k] = 0.0;
         for(l = 0; l < 3; l ++) temp2[j][k] += temp1[j][l]*nni[l][k];
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         F[j][k] = 0.0;
         for(l = 0; l < 3; l ++) F[j][k] += nni[j][l]*temp2[l][k];
       }
     }
-
     // define Si matrix
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp1[j][k] = tm[j][k]*sin(omega) - nt[j][k]*cos(omega);
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp2[j][k] = 0.0;
         for(l = 0; l < 3; l ++) temp2[j][k] += nni[j][l]*temp1[l][k];
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp1[j][k] = 0.0;
         for(l = 0; l < 3; l ++) temp1[j][k] += F[j][l]*nm[l][k];
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         Si[j][k] = -temp1[j][k]*sin(omega) + temp2[j][k];
       }
     }
-
     // define Qi
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         Qi[j][k] = -F[j][k]*sin(omega);
       }
     }
-
     // define Bi
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp1[j][k] = tm[j][k]*sin(omega) - nt[j][k]*cos(omega);
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp2[j][k] = 0.0;
         for(l = 0; l < 3; l ++) temp2[j][k] += nni[j][l]*temp1[l][k];
       }
     }
-
     // keep this temp1
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
@@ -2520,20 +2341,17 @@ void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bp
         for(l = 0; l < 3; l ++) temp1[j][k] += mn[j][l]*temp2[l][k];
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp2[j][k] = 0.0;
         for(l = 0; l < 3; l ++) temp2[j][k] += nni[j][l]*nm[l][k];
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp3[j][k] = tn[j][k]*cos(omega) - mt[j][k]*sin(omega);
       }
     }
-
     // keep this temp4
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
@@ -2541,14 +2359,12 @@ void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bp
         for(l = 0; l < 3; l ++) temp4[j][k] += temp3[j][l]*temp2[l][k];
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp2[j][k] = 0.0;
         for(l = 0; l < 3; l ++) temp2[j][k] += F[j][l]*nm[l][k]*sin(omega);
       }
     }
-
     // keep this temp3
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
@@ -2556,22 +2372,18 @@ void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bp
         for(l = 0; l < 3; l ++) temp3[j][k] += mn[j][l]*temp2[l][k];
       }
     }
-
     // keep this temp2
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         temp2[j][k] = mt[j][k] + tm[j][k];
       }
     }
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         Bi[j][k] = -temp2[j][k]*cos(omega) + temp3[j][k] + temp4[j][k] - temp1[j][k];
       }
     }
-
     // define BP, SP, QP
-
     for(j = 0; j < 3; j ++) {
       for(k = 0; k < 3; k ++) {
         BP[3*j+k][i] = Bi[j][k];
@@ -2580,16 +2392,13 @@ void Appcoros::stroh_p( double t[3], double n0[3], double qpmat[3][3], double bp
       }
     }
   } // end loop for i = 0 - ninteg
-
   value = 0.0;
   for(j = 0; j < 3; j ++) {
     for(k = 0; k < 3; k ++) {
       trapozidal(omegas,BP,j,k,value);
       bpmat[j][k] = value/2/pix;
-
       trapozidal(omegas,SP,j,k,value);
       spmat[j][k] = value/2/pix;
-
       trapozidal(omegas,QP,j,k,value);
       qpmat[j][k] = value/2/pix;
     }
@@ -2604,11 +2413,9 @@ void Appcoros::elastic_tensor()
 {
   int i,j,k,l;
   double anisotropy,delta[3][3];
-
   // shift c44
   anisotropy = fabs(2*c44 + c12 - c11);
   if(anisotropy < 1.0e-6) c44 += 1.0e-6;
-
   // identity matrix
   for(i = 0; i < 3; i++) {
     for(j = 0; j < 3; j++) {
@@ -2616,7 +2423,6 @@ void Appcoros::elastic_tensor()
       else delta[i][j] = 0;
     }
   }
-
   // cijkl tensor
   anisotropy = 2*c44 + c12 - c11;
   for(i = 0; i < 3; i++) {
@@ -2630,7 +2436,6 @@ void Appcoros::elastic_tensor()
       }
     }
   }
-
 }
 */
 /* ----------------------------------------------------------------------
@@ -2750,7 +2555,7 @@ void Appcoros::update_region(int i,int j, int r)
   if(r == 1 || r == 3 || r == 4){
     //if(type[i] == 1 && type[j] == 1){//diffusion in bulk, noneed to update
     //}
-    if(element[i] == 1 && element[j] == 2 && type[i] == 1 && type[j] == 2){//diffusion from bulk to surface // no need to check neighbor
+    if(element[i] != 2 && element[j] == 2 && type[i] == 1 && type[j] == 2){//diffusion from bulk to surface // no need to check neighbor
       type[i] = 2;
       type[j] = 3;
       update_list[0] = j;
@@ -2759,7 +2564,7 @@ void Appcoros::update_region(int i,int j, int r)
     }
 
     // for surface diffusion
-    if(element[i] == 2 && element[j] == 1 && type[i] == 2 && type[j] == 3){
+    if(element[i] == 2 && element[j] != 2 && type[i] == 2 && type[j] == 3){
       type[i] = 3;
       type[j] = 2;
       //if (element[i] == 2 && element[j] == 1 && type[i] == 2 && type[j] == 3) error->all(FLERR,"Stop");
@@ -2812,7 +2617,7 @@ int Appcoros::update_neighbor_check(int l)
         num_list++; //count the number that we need to put in next cycle!!double check start from 0
         update_list[k] = kd; //store neighborlist for next check cycle
       }
-      else if(element[kd] == 1 && type[kd] == 1){ //set bulk region as interface
+      else if(element[kd] != 2 && type[kd] == 1){ //set bulk region as interface
         type[kd] = 2;
     }
     }
@@ -2833,7 +2638,7 @@ int n;
 for (k = 0; k<n_update_list; k++){
   for (m = 0; m < numneigh[update_list[k]] ; m++){
     kd = neighbor[update_list[k]][m];
-    if (element[kd] ==1){// reverse interface type to bulk type
+    if (element[kd] !=2){// reverse interface type to bulk type
       for (n=0; n < numneigh[kd]; n++){
         if(type[neighbor[kd][n]] == 3){
           type[kd] =2;
