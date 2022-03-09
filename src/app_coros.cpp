@@ -702,9 +702,7 @@ double Appcoros::site_propensity(int i)
       }
     }
   }
-//*/
-  // for hop events, vacancy only currently
-  // propensity calculated in site_SP_energy();
+
 /*
   if (element[i] != VACANCY) return prob_reaction;
 */
@@ -714,47 +712,34 @@ double Appcoros::site_propensity(int i)
   }
   // for hop event previous, only vac at bulk region can diffuse
   // disable bulk metal to diffuse
-  if (element[i] != VACANCY && type[i] != 2) return prob_reaction; //disable bulk metal to diffuse
-  int k1, k2, j1, j2;
+  if (element[i] != VACANCY && type[i] != 2) {return prob_reaction;} //disable bulk metal to diffuse
+  int k1, k2, j1, j2, numneighmetal;
   // surface diffusion
   // enable adatom at interface can diffuse
   if (type[i]==2){
     for (k1 = 0; k1 < numneigh[i]; k1++){
       j1 = neighbor[i][k1]; // site j1 = neighbor of site i
       // disable adatom to diffuse with bulk region to prevent double diffusion
-/* comment out now becuase it will diable all surface diffusion somehow
-      if(type[j1]==2){
-        return prob_reaction;
-      }
-      if(type[j1]==1){
-        return prob_reaction;
-      }
-*/
-
-      if (type[j1] == 3) { // allow surface diffuse with vac at salt region
-        for (k2 = 0; k2 < numneigh[j1]; k2 ++){
-          j2 = neighbor[j1][k2]; // site j2 = neighbor of site j1
-          if (j2 != i && element[j2] != 2){ // if j1 has at least 2 neighbor atom then enable surfac diffuse
-            ebarrier = site_SP_energy(i,j1,engstyle); // diffusion barrier
-            hpropensity = exp(-ebarrier/KBT);
-            add_event(i,j1,1,-1,hpropensity);
-            prob_hop += hpropensity;
-            //return prob_hop + prob_reaction;
-         }
+      if (type[j1]==3){ // allow surface diffuse with vac at salt region
+        numneighmetal = 0;
+        for (k2=0; k2<numneigh[j1]; k2++){
+          j2 = neighbor[j1][k2]; //site j2 = neighbor of site j1
+          //surface diff is surface atom i migrate to j1 if j1 has at least one metal atom(keeping bonding)
+          if (j2!=i && element[j2] !=2){ //count neighbor of j1 if j2 is metal atom, then ++;
+            numneighmetal++;
+          }
+        }
+        if (numneighmetal > 0){ // if j1 has at least 1 neighbor atom except i then enable surfac diffuse
+          ebarrier = site_SP_energy(i,j1,engstyle); // diffusion barrier
+          hpropensity = exp(-ebarrier/KBT);
+          add_event(i,j1,1,-1,hpropensity);
+          prob_hop += hpropensity;
         }
       }
     }
+    return prob_hop + prob_reaction;
   }
-  /*
-  if (type[i] == 2){
-    for (k = 0; k < numneigh[j]; k++){
-      kd = neighbor[j][k];
-      if (kd != i && element[kd] == 1){
-        break; // if the site j has one more metal in neighbor, then enable surface diffusion
-      }else{return prob_reaction;}
-    }
-  }
-  */
+
   // check if acceleration is needed and update propensity if so
   /*
   if (acceleration_flag == 1 ) {
@@ -777,7 +762,6 @@ double Appcoros::site_propensity(int i)
       prob_hop += hpropensity;
     }
   }
-
   return prob_hop + prob_reaction;
 }
 
