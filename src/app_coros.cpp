@@ -2532,42 +2532,29 @@ void Appcoros::update_region(int i,int j, int r)
 {
   //define varialbes
   n_update_list = 0;
-  //update_list  // this is the list we want to check
-  // check type/element and update initial type
-  //int rstyle = events[ievent].style;
-  //rstyle == 1 || rstyle == 3 || rstyle ==4
+  //update_list  // this is the list we want to check, already defined in .h file
+  //check type/element and update type
   if(r == 1 || r == 3 || r == 4){
-    //if(type[i] == 1 && type[j] == 1){//diffusion in bulk, noneed to update
-    //}
-    if(element[i] != 2 && element[j] == 2 && type[i] == 1 && type[j] == 2){//diffusion from bulk to surface // no need to check neighbor
+    //if(type[i] == 1 && type[j] == 1){}//diffusion in bulk, no need to update
+    //diffusion from bulk to surface //need to check neighbor
+    if(element[i] != 2 && element[j] == 2 && type[i] == 1 && type[j] == 2){
       type[i] = 2;
       type[j] = 3;
       update_list[0] = j;
       update_list[1] = i;
       n_update_list = 2;
     }
-
     // for surface diffusion
     if(element[i] == 2 && element[j] != 2 && type[i] == 2 && type[j] == 3){
       type[i] = 3;
       type[j] = 2;
-      //if (element[i] == 2 && element[j] == 1 && type[i] == 2 && type[j] == 3) error->all(FLERR,"Stop");
       update_list[0] = j;
       update_list[1] = i;
       n_update_list = 2;
       while (n_update_list != 0){
-      n_update_list = update_surface_diff(n_update_list);
+      n_update_list = update_surface_diff(n_update_list); //!!check if need to combine with update_neighbor_check function
     }
     }
-
-    /*comment event 3 now, need to check in the future
-      else if(element[i] == 2 && type[i] == 2 && type[j] == 3){//diffusion from salt to surface
-      type[i] = 3;
-      type[j] = 3;
-      type_list[0] = type[i]; //use new updated site as first loop
-      type_list[1] = type[j];
-    }*/
-    //if(n_update_list == 0){return;}
   }
   if(r == 2){//reaction from metal to vacancy
     type[i] = 3;
@@ -2575,64 +2562,106 @@ void Appcoros::update_region(int i,int j, int r)
     n_update_list = 1;
   }
   // update neighbor lists
-  // if type_list have not all updated keep looping
+  // if type_list have not all updated, keep looping
   while (n_update_list != 0){
     n_update_list = update_neighbor_check(n_update_list); // assign new list to old list
   }
-
 }
 /* ----------------------------------------------------------------------
   update region_loop
+  !!currently check every neighbor if it is salt region(type3)
+  !!may check the effeciency in the future
 ------------------------------------------------------------------------- */
 int Appcoros::update_neighbor_check(int l)
 {
 // i2 = element[i]; i1 = type[i]
 // i1 = 1:bulk region; =2 interface region; =3 salt region
-  //neighbor_list = NULL // for temparary contain list
   int num_list = 0;
-  int k,m,kd;
+  int k,m,m2,kd, kd2;
+  int numneighmetal = 0;
   int n;
+  int temp_update_list[200];
 //check the neighbor of each lists
-  for (k = 0; k<n_update_list; k++){
-    for (m = 0; m < numneigh[update_list[k]] ; m++){
+  for (k = 0; k<n_update_list; k++){ // loop to n_update_list
+    for (m = 0; m < numneigh[update_list[k]] ; m++){ // loop of first neighbor
       kd = neighbor[update_list[k]][m];
-      if(element[kd] == 2 && type[kd] != 3){ //set vacancy as salt region
-        type[kd] = 3;
-        num_list++; //count the number that we need to put in next cycle!!double check start from 0
-        update_list[k] = kd; //store neighborlist for next check cycle
+      numneighmetal = 0; // reset to zero every loop
+      //if(element[kd] == 2 && type[kd] != 3){ //set vacancy as salt region
+      for (m2=0; m2<numneigh[kd]; m2++){ // loop of neighbors of neighbor
+        kd2 = neighbor[kd][m2]; //site kd2 = neighbor of site kd
+        if (type[kd2] == 3){ //count neighbor of kd if kd2 is salt region, then ++;
+            numneighmetal++;
+          }
+        }
+      if(element[kd] == 2 && type[kd] !=1 &&numneighmetal == 0){//if no salt region around vac, that vac become bulk region
+        type[kd] =1;
+        num_list++;
+        //update_list[k] = kd; //store neighborlist for next check cycle
+        temp_update_list[num_list-1] = kd; // temporary store neighborlist for next check cycle
       }
-      else if(element[kd] != 2 && type[kd] == 1){ //set bulk region as interface
-        type[kd] = 2;
-    }
-    }
-
-  return num_list;
+      if(element[kd] == 2 && type[kd] !=3 &&numneighmetal > 0){//if any salt region around vac, that vac become salt region
+        type[kd] =3;
+        num_list++;
+        //update_list[k] = kd; //store neighborlist for next check cycle
+        temp_update_list[num_list-1] = kd; // temporary store
+      }
+      if(element[kd] != 2 && type[kd] !=1 &&numneighmetal == 0){//if not salt region around metal, that metal become bulk region
+        type[kd] =1;
+      }
+      if(element[kd] != 2 && type[kd] !=2 &&numneighmetal > 0){//if any salt region around metal, that metal become interface region
+        type[kd] =2;
+      }
+  }
 }
-
+for (k = 0; k<num_list; k++){ // assign the temp store value to update_list array
+  update_list[k] = temp_update_list[k];
 }
-
+return num_list;
+}
 /* ----------------------------------------------------------------------
   update region check for surface diffusion
+  !!current same for update_neighbor_check function
+  !!may combine with it if needed
 ------------------------------------------------------------------------- */
 int Appcoros::update_surface_diff(int i){
 int num_list = 0;
-int k,m,kd;
+int numneighmetal = 0;
+int k,m,m2,kd, kd2;
 int n;
-//check the neighbor of each lists
+int temp_update_list[200];
 for (k = 0; k<n_update_list; k++){
   for (m = 0; m < numneigh[update_list[k]] ; m++){
     kd = neighbor[update_list[k]][m];
-    if (element[kd] !=2){// reverse interface type to bulk type
-      for (n=0; n < numneigh[kd]; n++){
-        if(type[neighbor[kd][n]] == 3){
-          type[kd] =2;
-          break;
-        }else{
-          type[kd] = 1;
+    numneighmetal = 0;
+    //if(element[kd] == 2 && type[kd] != 3){ //set vacancy as salt region
+    for (m2=0; m2<numneigh[kd]; m2++){
+      kd2 = neighbor[kd][m2]; //site kd2 = neighbor of site kd
+      if (type[kd2] == 3){ //count neighbor of kd if kd2 is salt region, then ++;
+          numneighmetal++;
+        }
       }
+    if(element[kd] == 2 && type[kd] !=1 &&numneighmetal == 0){//if no salt region around vac, that vac become bulk region
+      type[kd] =1;
+      num_list++;
+      //update_list[k] = kd; //store neighborlist for next check cycle
+      temp_update_list[num_list-1] = kd; // temporary store
+    }
+    if(element[kd] == 2 && type[kd] !=3 &&numneighmetal > 0){//if any salt region around vac, that vac become salt region
+      type[kd] =3;
+      num_list++;
+      //update_list[k] = kd; //store neighborlist for next check cycle
+      temp_update_list[num_list-1] = kd; // temporary store
+    }
+    if(element[kd] != 2 && type[kd] !=1 &&numneighmetal == 0){//if not salt region around metal, that metal become bulk region
+      type[kd] =1;
+    }
+    if(element[kd] != 2 && type[kd] !=2 &&numneighmetal > 0){//if any salt region around metal, that metal become interface region
+      type[kd] =2;
     }
 }
 }
+for (k = 0; k<num_list; k++){
+  update_list[k] = temp_update_list[k];
 }
 return num_list;
 }
