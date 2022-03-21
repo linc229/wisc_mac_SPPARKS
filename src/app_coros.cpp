@@ -113,6 +113,13 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
 
   // number of recombinations
   nrecombine = 0;
+
+  // number of each events by LC
+  nreact = 0;
+  nsurffe = 0;
+  nsurfcu = 0;
+  nbulkfe = 0;
+  nbulkcu = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -803,12 +810,29 @@ void Appcoros::site_event(int i, class RandomPark *random)
        element[i] = l;
        element[which] = element[j];
        element[j] = k;
+
     } else { // switch with a 1NN of i
       element[i] = element[j];
       element[j] = k;
+
     }
 
     hcount[element[i]] ++;
+
+    // this part is count number of diffusion for each elements by LC
+    if(element[i] == 1 && element[j] == 2){ // bulk diff of id2 = 1
+      nbulkfe ++;
+    }
+    if(element[i] == 3 && element[j] == 2){ // bulk diff of id2 = 3
+      nbulkcu ++;
+    }
+    if(element[i] == 2 && element[j] == 1){ // surf diff of id2 = 1
+      nsurffe ++;
+    }
+    if(element[i] == 2 && element[j] == 3){ // surf diff of id2 = 3
+      nsurfcu ++;
+    }
+
 
     // calculate MSD for each atom if activated
 
@@ -853,6 +877,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
     rcount[which] ++;
     nsites_local[k-1] --;
     nsites_local[j-1] ++;
+    nreact++; // count total number of reaction by LC
 
     // update reaction target number
     for(ii = 0; ii < nreaction; ii++) {

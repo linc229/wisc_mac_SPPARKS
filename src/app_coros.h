@@ -56,8 +56,14 @@ class Appcoros : public AppLattice {
   double **ebond1,**ebond2; //bond energy
   double **disp; //atomic displacement
   double *mbarrier; //migration barriers
-  double *surfbarrier; //migration barrier for surface diffusion 
+  double *surfbarrier; //migration barrier for surface diffusion by LC
   int *hcount;
+
+  int nreact; // number of reaction events by LC
+  int nsurffe; // number of surf diffusion event for id2 = 1 by LC
+  int nsurfcu; // number of surf diffusion event for id2 = 3 by LC
+  int nbulkfe; // number of bulk diffusion event for id2 = 1 by LC
+  int nbulkcu; // number of bulk diffusion event for id2 = 3 by LC
 
   int nrecombine; //number of recombination event
 
