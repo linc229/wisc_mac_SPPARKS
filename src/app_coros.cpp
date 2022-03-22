@@ -2690,3 +2690,30 @@ for (k = 0; k<num_list; k++){
 }
 return num_list;
 }
+
+/* ----------------------------------------------------------------------
+  update region check for surface diffusion
+  !!current same for update_neighbor_check function
+  !!may combine with it if needed
+------------------------------------------------------------------------- */
+void Appcoros::count_type(){
+  //int nbulk;
+  //int ninterface;
+  //int nsalt;
+int num_bulk = 0, num_interface = 0, num_salt = 0;
+int i;
+for (i = 0; i < nlocal; i++){
+  if(type[i] ==1){
+    num_bulk ++;
+  }
+  if(type[i] ==2){
+    num_interface ++;
+  }
+  if(type[i] ==3){
+    num_salt ++;
+  }
+}
+nbulk = num_bulk;
+ninterface = num_interface;
+nsalt = num_salt;
+}

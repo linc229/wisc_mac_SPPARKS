@@ -65,6 +65,10 @@ class Appcoros : public AppLattice {
   int nbulkfe; // number of bulk diffusion event for id2 = 1 by LC
   int nbulkcu; // number of bulk diffusion event for id2 = 3 by LC
 
+  int nbulk;
+  int ninterface;
+  int nsalt;
+
   int nrecombine; //number of recombination event
 
   class RandomPark *rancoros; //random number generator
@@ -168,6 +172,7 @@ class Appcoros : public AppLattice {
   void update_region(int i,int j, int r); // // update type after events
   int update_neighbor_check(int l); //update and return number of old list
   int update_surface_diff(int i); // update surface diff
+  void count_type();// to count each type
 
 };
 
