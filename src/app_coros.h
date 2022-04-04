@@ -42,6 +42,7 @@ class Appcoros : public AppLattice {
   int engstyle,nn1flag,nn2flag,barrierflag,diffusionflag; // 1NN or 2NN bonds
   int ndiffusion;
   int *type,*element,*aid; // variables on each lattice site
+  double *potential; // salt potential on each lattice site
   int firsttime;
 
   int *esites;
@@ -173,6 +174,8 @@ class Appcoros : public AppLattice {
   int update_neighbor_check(int l); //update and return number of old list
   int update_surface_diff(int i); // update surface diff
   void count_type();// to count each type
+  double bond_energy_ratio(int i); // calculate bond energy over ideal bulk diffusion
+  void update_potential(); // explicit update potential for each site
 
 };
 

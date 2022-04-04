@@ -40,6 +40,7 @@ App::App(SPPARKS *spk, int narg, char **arg) : Pointers(spk)
   xyz = NULL;
   iarray = NULL;
   darray = NULL;
+  d2array = NULL;
 
   sites_exist = 0;
 }
@@ -54,8 +55,10 @@ App::~App()
   memory->destroy(xyz);
   for (int i = 0; i < ninteger; i++) memory->destroy(iarray[i]);
   for (int i = 0; i < ndouble; i++) memory->destroy(darray[i]);
+  for (int i = 0; i < ndouble; i++) memory->destroy(d2array[i]);
   delete [] iarray;
   delete [] darray;
+  delete [] d2array;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -66,6 +69,9 @@ void App::create_arrays()
   for (int i = 0; i < ninteger; i++) iarray[i] = NULL;
   if (ndouble) darray = new double*[ndouble];
   for (int i = 0; i < ndouble; i++) darray[i] = NULL;
+  if (ndouble) d2array = new double*[ndouble];
+  for (int i = 0; i < ndouble; i++) d2array[i] = NULL;
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -74,6 +80,7 @@ void App::recreate_arrays()
 {
   delete [] iarray;
   delete [] darray;
+  delete [] d2array;
   create_arrays();
 }
 
@@ -188,7 +195,11 @@ void *App::extract(const char *name)
     if (n < 1 || n > ndouble) return NULL;
     return (void *) darray[n-1];
   }
-
+  if (strstr(name,"d2array") == name) {
+    int n = atoi(&name[6]);
+    if (n < 1 || n > ndouble) return NULL;
+    return (void *) d2array[n-1];
+  }
   return extract_app(name);
 }
 
@@ -241,4 +252,3 @@ int App::contiguous_sites()
   if (all != nglobal) return 0;
   return 1;
 }
-

@@ -40,6 +40,7 @@ class App : protected Pointers {
   double **xyz;                // coords of site
   int **iarray;                // one or more ints per site
   double **darray;             // one or more doubles per site
+  double **d2array;            // one or more doubles per site by LC
 
   App(class SPPARKS *, int, char **);
   virtual ~App();

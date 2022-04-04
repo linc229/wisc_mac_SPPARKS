@@ -40,7 +40,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   AppLattice(spk,narg,arg)
 {
   ninteger = 2; // first for lattice type,second for element
-  ndouble = 0;
+  ndouble = 1;
   delpropensity = 2;
   delevent = 1;
   allow_kmc = 1;
@@ -463,8 +463,10 @@ void Appcoros::define_2NN()
 
 void Appcoros::grow_app()
 {
+
   type = iarray[0];   // lattice type; i1 in input
   element = iarray[1];  // element type; i2 in input
+  potential = d2array[0]; // salt potential
 
   if(diffusionflag) {
     aid = iarray[2]; // initially set as global ID, must use set i3 unique in command line
@@ -525,6 +527,12 @@ void Appcoros::init_app()
       renable[i] = 0;
       target_global[i] = 0;
       target_local[i] = 0;
+    }
+  }
+  // add salt potential to each site if id3 = 1
+  for ( i = 0; i < nlocal; i++) {
+    if(type[i] == 3){
+      potential[i] = 10;
     }
   }
 /*
@@ -651,11 +659,19 @@ double Appcoros::site_SP_energy(int i, int j, int estyle)
   element[i] = iele;
   //barrier = migbarrier + (eng_after - eng_before)/2.0;
   eng = mbarrier[element[j]] + (eng1i + eng1j - eng0i -eng0j);
+
+  // add bonding effect by LC:
+  // barrier = migbarrier* (eng1NN/ideal) + (eng_after - eng_before)/2.0;
+  double bondratioi;
+  bondratioi = bond_energy_ratio(i);
+  eng = mbarrier[element[j]] * bondratioi + (eng1i + eng1j - eng0i -eng0j);
+
   //if starting atom is interface atom,
   //barrier = surfbarrier[i] + (eng_after - eng_before)/2.0;
-  if(type[i] == 2){
-    eng = surfbarrier[element[i]] + (eng1i + eng1j - eng0i -eng0j);
-  }
+  //!! remove surface barrier
+  //!!if(type[i] == 2){
+    //!!eng = surfbarrier[element[i]] + (eng1i + eng1j - eng0i -eng0j);
+  //!!}
   //add elastic contribution if applicable
   /* comment because assume no elastic interaction
   if(elastic_flag) {
@@ -710,18 +726,21 @@ double Appcoros::site_propensity(int i)
     }
   }
 
-/*
+
   if (element[i] != VACANCY) return prob_reaction;
-*/
+
   //nothing happen in salt region, for skipping event 3
-  //disable diffusion in salt region
+/*  //disable diffusion in salt region
   if(type[i]==3){return prob_reaction; //error here because it return nothing, but this function should return double
   }
-  // for hop event previous, only vac at bulk region can diffuse
+//!! remove surface diff
+   // for hop event previous, only vac at bulk region can diffuse
   // disable bulk metal to diffuse
   if (element[i] != VACANCY && type[i] != 2) {return prob_reaction;} //disable bulk metal to diffuse
   int k1, k2, j1, j2, numneighmetal;
-  // surface diffusion
+
+
+ // surface diffusion
   // enable adatom at interface can diffuse
   if (type[i]==2){
     for (k1 = 0; k1 < numneigh[i]; k1++){
@@ -746,7 +765,7 @@ double Appcoros::site_propensity(int i)
     }
     return prob_hop + prob_reaction;
   }
-
+*/
   // check if acceleration is needed and update propensity if so
   /*
   if (acceleration_flag == 1 ) {
@@ -957,13 +976,17 @@ void Appcoros::site_event(int i, class RandomPark *random)
     }
     */
   }
+
   // update type and reassign metal, interface and salt regions
   // for diffusion check and reaction check
   // update_region include subclass update_region_loop
-  update_region(i, j, rstyle);
+  //!! remove update interface check function
+  //!!update_region(i, j, rstyle);
   // compute propensity changes for participating sites i & j and their neighbors
-  update_propensity(i);
-  update_propensity(j);
+  //!!update_propensity(i);
+  //!!update_propensity(j);
+
+  update_potential();
 
   // check if any active reactions needs to be disabled
   /*
@@ -2716,4 +2739,32 @@ for (i = 0; i < nlocal; i++){
 nbulk = num_bulk;
 ninterface = num_interface;
 nsalt = num_salt;
+}
+/* ----------------------------------------------------------------------
+  bond_energy_ratio
+  is to calculate the bonding energy of i site over ideal bulk diffusion
+  first try use 1NN
+------------------------------------------------------------------------- */
+double Appcoros::bond_energy_ratio(int i){
+int j,jd,n1nn;
+double eng = 0.0;
+double ideal_eng = 0.0;
+double eng_ratio;
+n1nn = numneigh[i];  //num of 1NN
+for (j = 0; j < n1nn; j++) {
+  jd = neighbor[i][j];
+  eng += ebond1[element[i]][element[jd]];
+  ideal_eng += ebond1[element[i]][element[i]]; //ideal case for bulk diffusion
+  }
+
+eng_ratio = eng/ideal_eng;
+return eng_ratio;
+}
+/* ----------------------------------------------------------------------
+  bond_energy_ratio
+  is to calculate the bonding energy of i site over ideal bulk diffusion
+  first try use 1NN
+------------------------------------------------------------------------- */
+void Appcoros::update_potential(){
+
 }
