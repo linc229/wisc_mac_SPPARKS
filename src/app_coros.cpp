@@ -529,7 +529,7 @@ void Appcoros::init_app()
       target_local[i] = 0;
     }
   }
-  // add salt potential to each site if id3 = 1
+  // add salt potential to each site if id3 = 1 which is salt source
   for ( i = 0; i < nlocal; i++) {
     if(type[i] == 3){
       potential[i] = 10;
@@ -662,6 +662,7 @@ double Appcoros::site_SP_energy(int i, int j, int estyle)
 
   // add bonding effect by LC:
   // barrier = migbarrier* (eng1NN/ideal) + (eng_after - eng_before)/2.0;
+
   double bondratioi;
   bondratioi = bond_energy_ratio(i);
   eng = mbarrier[element[j]] * bondratioi + (eng1i + eng1j - eng0i -eng0j);
@@ -723,6 +724,23 @@ double Appcoros::site_propensity(int i)
           prob_reaction += hpropensity;
         }
       }
+
+      /*// salt reaction - pending
+      if(element[i] == rinput[j] && type[i] == rsite[j]) {  // may still need interface check function for rsite check
+        int k1, C0;
+        for (k1 = 0; k1 < numneigh[i]; k1++){
+        jid = neighbor[i][k1];
+        if(potential[jid] >= C0){
+        ebarrier = rbarrier[j] * site_SP_energy ;
+        hpropensity = rrate[j] * potential[jid] * exp(-ebarrier/KBT);
+        add_event(i,jid,2,j,hpropensity);
+        prob_reaction += hpropensity;
+      }
+
+        }
+      }
+
+      */
     }
   }
 
@@ -838,7 +856,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
 
     hcount[element[i]] ++;
 
-    // this part is count number of diffusion for each elements by LC
+    // this part is count number of diffusion for each elements by LC -- pending
     if(element[i] == 1 && element[j] == 2){ // bulk diff of id2 = 1
       nbulkfe ++;
     }
@@ -896,6 +914,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
     rcount[which] ++;
     nsites_local[k-1] --;
     nsites_local[j-1] ++;
+    // need to add function to consume salt concentration
     nreact++; // count total number of reaction by LC
 
     // update reaction target number
@@ -986,7 +1005,8 @@ void Appcoros::site_event(int i, class RandomPark *random)
   //!!update_propensity(i);
   //!!update_propensity(j);
 
-  update_potential();
+// to update potential every period time with explicit 2d diffusion by LC -- pending
+  //update_potential();
 
   // check if any active reactions needs to be disabled
   /*
@@ -2764,7 +2784,15 @@ return eng_ratio;
   bond_energy_ratio
   is to calculate the bonding energy of i site over ideal bulk diffusion
   first try use 1NN
+  !!pending
 ------------------------------------------------------------------------- */
 void Appcoros::update_potential(){
+int k, jd;
 
+/*
+  for ( k = 0; k < nlocal; k++) {
+
+
+  }
+*/
 }
