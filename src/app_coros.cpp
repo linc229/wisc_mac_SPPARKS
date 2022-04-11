@@ -2733,6 +2733,7 @@ for (k = 0; k<num_list; k++){
 }
 return num_list;
 }
+<<<<<<< HEAD
 
 /* ----------------------------------------------------------------------
   update region check for surface diffusion
@@ -2796,3 +2797,5 @@ int k, jd;
   }
 */
 }
+=======
+>>>>>>> parent of 436ff7f (0322 count type)
