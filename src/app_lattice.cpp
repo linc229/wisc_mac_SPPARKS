@@ -1253,8 +1253,6 @@ void AppLattice::grow(int n)
     memory->grow(iarray[i],nmax,"app:iarray");
   for (int i = 0; i < ndouble; i++)
     memory->grow(darray[i],nmax,"app:darray");
-  for (int i = 0; i < ndouble; i++)
-    memory->grow(d2array[i],nmax,"app:d2array");
 
   grow_app();
 }
@@ -1279,7 +1277,7 @@ void AppLattice::add_site(tagint n, double x, double y, double z)
 
   for (int i = 0; i < ninteger; i++) iarray[i][nlocal] = 0;
   for (int i = 0; i < ndouble; i++) darray[i][nlocal] = 0.0;
-  for (int i = 0; i < ndouble; i++) d2array[i][nlocal] = 0.0;
+
   nlocal++;
 }
 
@@ -1306,7 +1304,6 @@ void AppLattice::add_ghost(tagint n, double x, double y, double z,
 
   for (int i = 0; i < ninteger; i++) iarray[i][m] = 0;
   for (int i = 0; i < ndouble; i++) darray[i][m] = 0.0;
-  for (int i = 0; i < ndouble; i++) d2array[i][m] = 0.0;
 
   nghost++;
 }
@@ -1333,7 +1330,6 @@ void AppLattice::add_values(int i, char **values)
 {
   for (int m = 0; m < ninteger; m++) iarray[m][i] = atoi(values[m]);
   for (int m = 0; m < ndouble; m++) darray[m][i] = atof(values[m+ninteger]);
-  for (int m = 0; m < ndouble; m++) d2array[m][i] = atof(values[m+ninteger]);
 }
 
 /* ----------------------------------------------------------------------
@@ -1422,7 +1418,6 @@ bigint AppLattice::memory_usage()
   bytes += nmax*3 * sizeof(double);         // xyz
   bytes += ninteger*nmax * sizeof(int);     // iarray
   bytes += ndouble*nmax * sizeof(double);   // darray
-  bytes += ndouble*nmax * sizeof(double);   // d2array
 
   bytes += nmax * sizeof(int);              // numneigh
   bytes += nmax*maxneigh * sizeof(int);     // neighbor
