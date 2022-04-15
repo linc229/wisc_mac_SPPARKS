@@ -103,6 +103,9 @@ class Appcoros : public AppLattice {
   double *rdamp,*pn_local,*pn_global,*bfreq;
   double **xmix,**pmix;
 
+//parameter for salt potential
+  int *potential; //atomic displacement
+
 //parameter for acceleration
   int ntrap;
   int *trap_type;
@@ -173,6 +176,7 @@ class Appcoros : public AppLattice {
   int update_neighbor_check(int l); //update and return number of old list
   int update_surface_diff(int i); // update surface diff
   void count_type();// to count each type
+  void potential_diff(); //perform salt potential_diffusion
 
 };
 

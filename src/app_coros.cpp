@@ -39,8 +39,9 @@ enum{ZERO,FE,VACANCY,CU,NI,MN,Si,P,C,SIA};       // same as Diagcoros; element
 Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   AppLattice(spk,narg,arg)
 {
-  ninteger = 2; // first for lattice type,second for element
-  ndouble = 0;
+  ninteger = 3; // first for lattice type,second for element
+  ndouble = 0; // default
+  //ndouble = 1; // add 1 to contain potential by LC
   delpropensity = 2;
   delevent = 1;
   allow_kmc = 1;
@@ -384,6 +385,22 @@ void Appcoros::input_app(char *command, int narg, char **arg)
       }
     }
   }
+  // command for initial salt potential, site and potential(double)
+  else if (strcmp(command, "saltpotential") ==0) {
+    int saltsite;
+    double saltpotential;
+    if(narg != 2) error->all(FLERR,"illegal reaction command");
+    saltsite = atoi(arg[0]); // salt site
+    saltpotential = atoi(arg[1]); // initial potential
+
+    // check salt souce that the potential should be contant 10 value;
+/*      for (i = 0; i < nlocal; i++){
+        if (type[i] == saltsite){
+          potential[i] = saltpotential;
+        }
+      }
+*/
+  }
 
 /*
   else if (strcmp(command, "ballistic") ==0) {
@@ -465,11 +482,21 @@ void Appcoros::grow_app()
 {
   type = iarray[0];   // lattice type; i1 in input
   element = iarray[1];  // element type; i2 in input
-
+  potential = iarray[2]; // i3 contain potential of salt by LC d1 in input
   if(diffusionflag) {
     aid = iarray[2]; // initially set as global ID, must use set i3 unique in command line
-    disp = darray; // msd; zero initially
+    //disp = darray; // msd; zero initially
+
   }
+/*
+  int i;
+    // check salt souce that the potential should be contant 10 value;
+      for (i = 0; i < nlocal; i++){
+        if (type[i] == 3){
+          potential[0][i] = 10.0;
+        }
+      }
+*/
 }
 
 /* ----------------------------------------------------------------------
@@ -527,6 +554,16 @@ void Appcoros::init_app()
       target_local[i] = 0;
     }
   }
+
+  // check salt souce that the potential should be contant 10 value;
+/*  int p;
+    for (p = 0; p < nlocal; p++){
+      if (type[p] == 3){
+        potential[p] = 10.0;
+      }
+    }
+*/
+
 /*
   // initialize the time_list for ballistic mixing
   if(ballistic_flag) {
@@ -651,11 +688,15 @@ double Appcoros::site_SP_energy(int i, int j, int estyle)
   element[i] = iele;
   //barrier = migbarrier + (eng_after - eng_before)/2.0;
   eng = mbarrier[element[j]] + (eng1i + eng1j - eng0i -eng0j);
+
+//!!diable surface diffuse by LC
+/*
   //if starting atom is interface atom,
   //barrier = surfbarrier[i] + (eng_after - eng_before)/2.0;
   if(type[i] == 2){
     eng = surfbarrier[element[i]] + (eng1i + eng1j - eng0i -eng0j);
   }
+*/
   //add elastic contribution if applicable
   /* comment because assume no elastic interaction
   if(elastic_flag) {
@@ -710,9 +751,10 @@ double Appcoros::site_propensity(int i)
     }
   }
 
-/*
+
   if (element[i] != VACANCY) return prob_reaction;
-*/
+
+/*  diable surface diffusion
   //nothing happen in salt region, for skipping event 3
   //disable diffusion in salt region
   if(type[i]==3){return prob_reaction; //error here because it return nothing, but this function should return double
@@ -746,7 +788,7 @@ double Appcoros::site_propensity(int i)
     }
     return prob_hop + prob_reaction;
   }
-
+*/
   // check if acceleration is needed and update propensity if so
   /*
   if (acceleration_flag == 1 ) {
@@ -802,6 +844,8 @@ void Appcoros::site_event(int i, class RandomPark *random)
   int which = events[ievent].which; // type of reactions or neighbor id for acceleration
   j = events[ievent].jpartner;
 
+
+
   // switch element between site i and jpartner for hop diffusion
   if(rstyle == 1 || rstyle == 3 || rstyle ==4) {
     k = element[i];
@@ -820,6 +864,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
     hcount[element[i]] ++;
 
     // this part is count number of diffusion for each elements by LC
+    /*
     if(element[i] == 1 && element[j] == 2){ // bulk diff of id2 = 1
       nbulkfe ++;
     }
@@ -832,7 +877,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
     if(element[i] == 2 && element[j] == 3){ // surf diff of id2 = 3
       nsurfcu ++;
     }
-
+    */
 
     // calculate MSD for each atom if activated
 
@@ -957,6 +1002,11 @@ void Appcoros::site_event(int i, class RandomPark *random)
     }
     */
   }
+// perform salt_potential diff every certain time
+  potential_diff();
+
+//!! disable interface check by LC
+/*
   // update type and reassign metal, interface and salt regions
   // for diffusion check and reaction check
   // update_region include subclass update_region_loop
@@ -964,6 +1014,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
   // compute propensity changes for participating sites i & j and their neighbors
   update_propensity(i);
   update_propensity(j);
+*/
 
   // check if any active reactions needs to be disabled
   /*
@@ -2716,4 +2767,68 @@ for (i = 0; i < nlocal; i++){
 nbulk = num_bulk;
 ninterface = num_interface;
 nsalt = num_salt;
+}
+
+/* ----------------------------------------------------------------------
+  update region check for surface diffusion
+  !!current same for update_neighbor_check function
+  !!may combine with it if needed
+------------------------------------------------------------------------- */
+void Appcoros::potential_diff(){
+int i, j,k, kd;
+int iid, jid;
+int check_label;
+int iwhich;
+int neighbor_list[10];
+double rand_i;
+// step 1 find one randon site i which potential = 1
+  iwhich = -1;
+  check_label= 0;
+  while(iwhich < 0 || iwhich >= nlocal || check_label !=1){
+    rand_i = rancoros->uniform(); // create random float value
+    iwhich = static_cast<int> (nlocal*rand_i);
+    if (potential[iwhich] == 1){
+      check_label = 1;
+      iid = iwhich;
+    }
+  }
+// step 2 find a randon neighbor of site iid
+// create neighbor_list of site iid
+  for (j = 0; j < numneigh[iid] ; j++){
+    kd = neighbor[iid][j];
+    //neighbor_list[j] = kd;
+    if (potential[kd] == 0 && element[kd] == 2){
+      neighbor_list[j] = kd;
+    }
+  }
+  if (numneigh[iid] ==0){return;} // exception
+  // find a randon neighbor which potential = 0 and element should be vacancy
+  /*iwhich = -1;
+  check_label= 0;
+  while(iwhich < 0 || iwhich >= numneigh[iid] || check_label !=1){
+    rand_i = rancoros->uniform(); // create random float value from 0 to 1
+    iwhich = static_cast<int> (numneigh[iid]*rand_i);
+    if (potential[iwhich] == 0){  //potential[iwhich] == 0 && element[iwhich] == 2
+      check_label = 1;
+      jid = neighbor_list[iwhich];
+    }
+  }*/
+ // another random draw from arrays
+int rand_index = -1;
+int array_size = sizeof(neighbor_list)/sizeof(neighbor_list[0]);
+if (array_size == 0){return;} //exception
+   while (rand_index < 0 || rand_index >=  array_size){
+     rand_index = rand() %  array_size;
+   }
+jid = neighbor_list[rand_index];
+
+// step 3 swap the potential of i and j
+k = potential[iid];
+potential[iid] = potential[jid];
+potential[jid] = k;
+
+// constant check, i1 =3 : infinite salt source
+if (type[iid] ==3){potential[iid]=1;}
+if (type[jid] ==3){potential[jid]=1;}
+
 }
