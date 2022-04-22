@@ -98,13 +98,18 @@ class Appcoros : public AppLattice {
   double dt_interval,fvt,dt_real,dt_akmc,treal_me,takmc_me;
 
 //parameter for ballistic mixing
+  //int saltdiffusion_flag; // LC
   int nballistic;
   int *time_old,*time_new;
   double *rdamp,*pn_local,*pn_global,*bfreq;
   double **xmix,**pmix;
 
 //parameter for salt potential
+  int nsaltdiffusion; // LC
   int *potential; //atomic displacement
+  int *salt_time_old,*salt_time_new;
+  double *salt_bfreq;
+  int num_saltdiffusion ; // number of salt diffusion motion
 
 //parameter for acceleration
   int ntrap;
@@ -177,7 +182,10 @@ class Appcoros : public AppLattice {
   int update_surface_diff(int i); // update surface diff
   void count_type();// to count each type
   void potential_diff(); //perform salt potential_diffusion
-
+  void check_saltdiffusion(double); // check salt diffusion and time
+  void grow_saltdiffusion();// grow memory for salt diffusion
+  void salt_remove(int i); //remove salt potential after reaction by LC
+  int count_salt(); // count salt if i3 =1
 };
 
 }

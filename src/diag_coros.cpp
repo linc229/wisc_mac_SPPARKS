@@ -32,7 +32,7 @@ enum{sink=30};                                    // number of sink absorption
 enum{recombine=41};                               // number of recombination
 enum{dFE=71,dVACANCY,dCU,dNI,dMN,dSi,dP,dC,dSIA}; // MSD for each element
 enum{energy=81,treal,fvt};                        // energy and realistic time
-enum{react=61, surffe, surfcu, bulkfe, bulkcu};     // number of each events
+enum{react=61, surffe, surfcu, bulkfe, bulkcu, nsalt, nsaltdiff};     // number of each events
 //!! be careful for the integer and float at line 164 when adding new variables
 /* ---------------------------------------------------------------------- */
 
@@ -133,7 +133,8 @@ void Diagcoros::init()
     else if (strcmp(list[i], "nsurfcu") == 0) which[i] = surfcu;
     else if (strcmp(list[i], "nbulkfe") == 0) which[i] = bulkfe;
     else if (strcmp(list[i], "nbulkcu") == 0) which[i] = bulkcu;
-
+    else if (strcmp(list[i], "nsalt") == 0) which[i] = nsalt;
+    else if (strcmp(list[i], "nsaltdiff") == 0) which[i] = nsaltdiff;
 
     else if (strcmp(list[i],"recombine") == 0) which[i] = recombine;
     else if (strcmp(list[i],"energy") == 0) which[i] = energy;
@@ -247,6 +248,8 @@ void Diagcoros::compute()
     else if (which[i] == surfcu) ivalue = appcoros->nsurfcu; //total surf_diff event for id2 = 3
     else if (which[i] == bulkfe) ivalue = appcoros->nbulkfe; //total bulk_diff event for id2 = 1
     else if (which[i] == bulkcu) ivalue = appcoros->nbulkcu; //total bulk_diff event for id2 = 3
+    else if (which[i] == nsalt) ivalue = appcoros->count_salt(); //total salt particle for id3 = 1
+    else if (which[i] == nsaltdiff) ivalue = appcoros->num_saltdiffusion; //total bulk_diff event for id2 = 3
 
 
     else if (which[i] == recombine) dvalue = appcoros->nrecombine; //number of reocmbination

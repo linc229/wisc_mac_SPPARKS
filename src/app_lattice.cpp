@@ -84,6 +84,7 @@ AppLattice::AppLattice(SPPARKS *spk, int narg, char **arg) : App(spk,narg,arg)
 
   app_update_only = 0;
   reaction_flag = ballistic_flag = frenkelpair_flag = time_flag = sinkmotion_flag = clst_flag = concentrationflag = 0; //yongfeng
+  saltdiffusion_flag = 0; //LC
 }
 
 /* ---------------------------------------------------------------------- */
@@ -501,6 +502,7 @@ void AppLattice::iterate_kmc_global(double stoptime)
         if (frenkelpair_flag) check_frenkelpair(time); //yongfeng
         if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
         if (diffusionflag) onsager(time); //yongfeng
+        if (saltdiffusion_flag) check_saltdiffusion(time); //LC
         //if (ballistic_flag) sia_concentration(dt_step); // yongfeng
 	timer->stamp(TIME_APP);
       } else {
@@ -643,6 +645,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
     if (concentrationflag) concentration_field(dt_kmc); //yongfeng
     //if (ballistic_flag) sia_concentration(dt_kmc); // yongfeng
+    if (saltdiffusion_flag) check_saltdiffusion(time);// LC
 
     if (time >= stoptime) alldone = 1;
     if (alldone || time >= nextoutput) {

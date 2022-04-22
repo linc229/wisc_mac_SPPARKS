@@ -85,6 +85,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   // flags and parameters for sinks, dislocations, reactions and ballistic mixing
   sink_flag = elastic_flag = moduli_flag = dislocation_flag = reaction_flag = acceleration_flag = 0; //flags for sink dislocation and vacancy
   nsink = ndislocation = nreaction = nballistic = ntrap = 0;
+  nsaltdiffusion = 0; // LC
 
   // arrays for dislocations
   dislocation_type = line_vector = nsegment = NULL;
@@ -108,6 +109,11 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   xmix = pmix = NULL;
   min_bfreq = BIGNUMBER;
 
+  // arrays for salt diffusion by LC
+  salt_bfreq = NULL;
+  salt_time_old = salt_time_new = NULL;
+  num_saltdiffusion = 0;
+
   // 2NN neigbor information
   numneigh2 = NULL;
   neighbor2 = NULL;
@@ -121,6 +127,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   nsurfcu = 0;
   nbulkfe = 0;
   nbulkcu = 0;
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -178,6 +185,12 @@ Appcoros::~Appcoros()
     memory->destroy(pmix);
   }
 
+  // salt diffusion by LC
+  if (saltdiffusion_flag) { // memory use related to salt diffusion
+    memory->destroy(salt_bfreq);
+    memory->destroy(salt_time_old);
+    memory->destroy(salt_time_new);
+  }
 
   if (reaction_flag) {// memory use related to reaction
     memory->destroy(rsite);
@@ -385,14 +398,24 @@ void Appcoros::input_app(char *command, int narg, char **arg)
       }
     }
   }
-  // command for initial salt potential, site and potential(double)
+  // command for initial salt potential, site and potential(double) not used now
   else if (strcmp(command, "saltpotential") ==0) {
     int saltsite;
     double saltpotential;
     if(narg != 2) error->all(FLERR,"illegal reaction command");
     saltsite = atoi(arg[0]); // salt site
     saltpotential = atoi(arg[1]); // initial potential
-
+  }
+  // command for salt diffusion
+  else if (strcmp(command, "saltdiffusion") ==0) {
+    if(narg != 1) error->all(FLERR,"illegal ballistic command");
+    saltdiffusion_flag = 1;
+    grow_saltdiffusion();
+    salt_bfreq[nsaltdiffusion] = atoi(arg[0]); // diffusion frequency
+    //rdamp[nballistic] = atof(arg[1]); // mix range
+    //if(min_bfreq > bfreq[nballistic]) min_bfreq = bfreq[nballistic];
+    nsaltdiffusion ++; // number of saltdiffusion events
+  }
     // check salt souce that the potential should be contant 10 value;
 /*      for (i = 0; i < nlocal; i++){
         if (type[i] == saltsite){
@@ -400,7 +423,7 @@ void Appcoros::input_app(char *command, int narg, char **arg)
         }
       }
 */
-  }
+
 
 /*
   else if (strcmp(command, "ballistic") ==0) {
@@ -484,7 +507,7 @@ void Appcoros::grow_app()
   element = iarray[1];  // element type; i2 in input
   potential = iarray[2]; // i3 contain potential of salt by LC d1 in input
   if(diffusionflag) {
-    aid = iarray[2]; // initially set as global ID, must use set i3 unique in command line
+    aid = iarray[3]; // initially set as global ID, must use set i3 unique in command line
     //disp = darray; // msd; zero initially
 
   }
@@ -554,16 +577,13 @@ void Appcoros::init_app()
       target_local[i] = 0;
     }
   }
-
-  // check salt souce that the potential should be contant 10 value;
-/*  int p;
-    for (p = 0; p < nlocal; p++){
-      if (type[p] == 3){
-        potential[p] = 10.0;
-      }
+  // initialize the time_list for salt diffusion
+  if(saltdiffusion_flag) {
+    for(i = 0; i < nsaltdiffusion; i ++) {
+       salt_time_old[i] = 0;
+       salt_time_new[i] = 0;
     }
-*/
-
+  }
 /*
   // initialize the time_list for ballistic mixing
   if(ballistic_flag) {
@@ -716,6 +736,8 @@ double Appcoros::site_SP_energy(int i, int j, int estyle)
 double Appcoros::site_propensity(int i)
 {
   int j, iid, jid;
+  int k, kd, sum_kd;
+
 
   // valid hop and recombination tabulated lists
   // propensity for each event is input by user
@@ -733,9 +755,21 @@ double Appcoros::site_propensity(int i)
   if(reaction_flag) { //reaction flag
     for(j = 0; j < nreaction; j++) {
       if(renable[j] == 0) continue;
-      if(element[i] == rinput[j] && type[i] == rsite[j]) {
+      if(element[i] == rinput[j] && type[i] == rsite[j]) { //comment by LC
+      //if(element[i] == rinput[j]){ // not check rsite
         iid = rinput[j];
         jid = routput[j];
+
+        // count number of neighbor salt by LC
+        sum_kd = 0;
+        for (k = 0; k < numneigh[i] ; k++){
+          kd = neighbor[i][k];
+          if (potential[kd] == 1){
+            sum_kd ++;
+          }
+        }
+        if (sum_kd == 0) return prob_reaction;
+        // count number of neighbor salt
 
         if(!(sink_flag && isink[i][jid -1] == 1)) {//production at sinks allowed
           ebarrier = rbarrier[j];
@@ -743,7 +777,8 @@ double Appcoros::site_propensity(int i)
           /*
           if(elastic_flag) ebarrier += elastic_energy(i,jid) - elastic_energy(i,iid);
           */
-          hpropensity = rrate[j] * exp(-ebarrier/KBT);
+          // k = rate * concentration * exp(-Ea/KbT)
+          hpropensity = rrate[j] * sum_kd * exp(-ebarrier/KBT);
           add_event(i,jid,2,j,hpropensity);
           prob_reaction += hpropensity;
         }
@@ -753,6 +788,7 @@ double Appcoros::site_propensity(int i)
 
 
   if (element[i] != VACANCY) return prob_reaction;
+  //if (element[i] == VACANCY && potential[i] == 1) return prob_reaction;
 
 /*  diable surface diffusion
   //nothing happen in salt region, for skipping event 3
@@ -845,22 +881,30 @@ void Appcoros::site_event(int i, class RandomPark *random)
   j = events[ievent].jpartner;
 
 
-
+  int kp, lp;   //LC swap salt potential also
   // switch element between site i and jpartner for hop diffusion
   if(rstyle == 1 || rstyle == 3 || rstyle ==4) {
     k = element[i];
+    kp = potential[i]; // LC swap salt potential
     if (rstyle == 4) { // switch with a 1NN of which
+
        l = element[which];
+       lp = potential[which]; //LC swap salt potential
        element[i] = l;
+       potential[i] = lp; //LC swap salt potential
        element[which] = element[j];
+       potential[which] = potential[j]; //LC swap salt potential
        element[j] = k;
+       potential[j] = kp; // LC swap salt potential
 
     } else { // switch with a 1NN of i
       element[i] = element[j];
+      potential[i] = potential[j] ; //LC swap salt potential
       element[j] = k;
-
+      potential[j] = kp; //LC swap salt potential
     }
-
+    update_propensity(i);
+    update_propensity(j);
     hcount[element[i]] ++;
 
     // this part is count number of diffusion for each elements by LC
@@ -922,7 +966,9 @@ void Appcoros::site_event(int i, class RandomPark *random)
     rcount[which] ++;
     nsites_local[k-1] --;
     nsites_local[j-1] ++;
+
     nreact++; // count total number of reaction by LC
+    salt_remove(i);
 
     // update reaction target number
     for(ii = 0; ii < nreaction; ii++) {
@@ -1003,7 +1049,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
     */
   }
 // perform salt_potential diff every certain time
-  potential_diff();
+  //potential_diff();
 
 //!! disable interface check by LC
 /*
@@ -2760,15 +2806,32 @@ for (i = 0; i < nlocal; i++){
   if(type[i] ==2){
     num_interface ++;
   }
-  if(type[i] ==3){
+  /*if(type[i] ==3){
+    num_salt ++;
+  }*/
+  if(potential[i] == 1){
     num_salt ++;
   }
 }
 nbulk = num_bulk;
 ninterface = num_interface;
+//nsalt = num_salt;
 nsalt = num_salt;
 }
 
+/* ----------------------------------------------------------------------
+  count number of salt if i3 = 1, output to diag_coros.cpp file
+------------------------------------------------------------------------- */
+int Appcoros::count_salt(){
+int num_salt = 0;
+int i;
+for (i = 0; i < nlocal; i++){
+  if(potential[i] == 1){
+    num_salt ++;
+  }
+}
+return num_salt;
+}
 /* ----------------------------------------------------------------------
   update region check for surface diffusion
   !!current same for update_neighbor_check function
@@ -2779,8 +2842,13 @@ int i, j,k, kd;
 int iid, jid;
 int check_label;
 int iwhich;
-int neighbor_list[10];
+int sum = 0;
+int nsalt;
 double rand_i;
+nsalt = count_salt();
+  if (nsalt == 0){ // exception
+    return;
+  }
 // step 1 find one randon site i which potential = 1
   iwhich = -1;
   check_label= 0;
@@ -2794,14 +2862,19 @@ double rand_i;
   }
 // step 2 find a randon neighbor of site iid
 // create neighbor_list of site iid
+//int neighbor_list[numneigh[iid]]; // length of neighbor
+int neighbor_list[numneigh[iid]] = { -1 };
   for (j = 0; j < numneigh[iid] ; j++){
     kd = neighbor[iid][j];
     //neighbor_list[j] = kd;
     if (potential[kd] == 0 && element[kd] == 2){
       neighbor_list[j] = kd;
     }
+    else{neighbor_list[j] = -1;}
+    sum += neighbor_list[j];
   }
   if (numneigh[iid] ==0){return;} // exception
+  if (sum == -1*numneigh[iid]){return;}// exception
   // find a randon neighbor which potential = 0 and element should be vacancy
   /*iwhich = -1;
   check_label= 0;
@@ -2815,12 +2888,17 @@ double rand_i;
   }*/
  // another random draw from arrays
 int rand_index = -1;
+check_label= 0;
 int array_size = sizeof(neighbor_list)/sizeof(neighbor_list[0]);
 if (array_size == 0){return;} //exception
-   while (rand_index < 0 || rand_index >=  array_size){
-     rand_index = rand() %  array_size;
+ while (rand_index < 0 || rand_index >=  array_size ||check_label ==0){
+   rand_index = rand() %  array_size;
+   if (neighbor_list[rand_index] != -1 ){
+     check_label = 1;
+     jid = neighbor_list[rand_index];
    }
-jid = neighbor_list[rand_index];
+ }
+//jid = neighbor_list[rand_index];
 
 // step 3 swap the potential of i and j
 k = potential[iid];
@@ -2831,4 +2909,93 @@ potential[jid] = k;
 if (type[iid] ==3){potential[iid]=1;}
 if (type[jid] ==3){potential[jid]=1;}
 
+// need to update propensity after salt diffusion
+// because I change the property of lattice site
+update_propensity(iid);
+update_propensity(jid);
+num_saltdiffusion ++;
+}
+
+/* ----------------------------------------------------------------------
+salt_potential remove after reaction by LC
+------------------------------------------------------------------------- */
+void Appcoros::salt_remove(int i){
+int k, kd, jid;
+int check_label;
+int sum = 0;
+  // create neighbor_list of site i which potential is 1
+  int neighbor_list[numneigh[i]] = { -1 };
+  for (k = 0; k < numneigh[i] ; k++){
+    kd = neighbor[i][k];
+    if (potential[kd] == 1){
+      neighbor_list[k] = kd;
+    }
+    else {
+      neighbor_list[k] = -1;
+      sum ++;
+    }
+    //sum += neighbor_list[k];
+  }
+  if (numneigh[i] == 0){return;} // exception
+  if (sum == numneigh[i]){return;}// exception
+
+  // find random neighbor which site is salt
+  int array_size = sizeof(neighbor_list)/sizeof(neighbor_list[0]);
+  if (array_size == 0){return;} //exception
+  int rand_index = -1;
+  check_label= 0;
+  while (rand_index < 0 || rand_index >  array_size || check_label == 0){
+    rand_index = rand() %  array_size;
+    if (neighbor_list[rand_index] != -1 ){
+      check_label = 1;
+      // assign array id to lattice id
+      jid = neighbor_list[rand_index];
+    }
+    //sum ++;
+    //if (sum >100){ // temparary exception
+    //  check_label = 1;
+    //  rand_index = 0;
+    //}
+  }
+  // assign array id to lattice id
+  //jid = neighbor_list[rand_index];
+  // remove salt by set potential 1 -->> 0
+  potential[jid] = 0;
+update_propensity(jid);
+}
+
+
+/* ----------------------------------------------------------------------
+   check if perform salt diffusion
+------------------------------------------------------------------------- */
+void Appcoros::check_saltdiffusion(double t)
+{
+  int nmix = 0;
+  for(int i = 0; i < nsaltdiffusion; i ++) {
+     salt_time_new[i] = static_cast<int>(t/salt_bfreq[i]);
+     nmix = salt_time_new[i] - salt_time_old[i];
+
+     while (nmix) {  //perform mixing nmix times
+       nmix --;
+       potential_diff();
+       if(nmix == 0) salt_time_old[i] = salt_time_new[i];  //update time
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+  grow memory for salt diffusion
+------------------------------------------------------------------------- */
+void Appcoros::grow_saltdiffusion()
+{
+  int n = nsaltdiffusion + 1;
+  int m = 3;
+  memory->grow(salt_bfreq,n,"app/coros:salt_bfreq");
+  memory->grow(salt_time_old,n,"app/coros:salt_time_old");
+  memory->grow(salt_time_new,n,"app/coros:salt_time_new");
+  //memory->grow(rdamp,n,"app/coros:rdamp");
+  //memory->grow(pn_local,n,"app/coros:pn_local");
+  //memory->grow(pn_global,n,"app/coros:pn_global");
+  //memory->grow(xmix,n,m,"app/coros:xmix");
+  //memory->grow(pmix,n,nlocal,"app/coros:pmix");
 }

@@ -83,6 +83,7 @@ class AppLattice : public App {
   virtual void cluster() {} //yongfeng
   virtual void sia_concentration(double) {} //Yongfeng
   virtual void onsager(double) {} //Yongfeng
+  virtual void check_saltdiffusion(double) {} //LC
 
  protected:
   int me,nprocs;
@@ -111,6 +112,7 @@ class AppLattice : public App {
   int concentrationflag;       // flag for concentration field calculation
   int clst_flag;               // flag for cluster analysis
   int diffusionflag;           // 1 if calculate the onsager coefficient
+  int saltdiffusion_flag;      // by LC 1 if app supports ballistic mixing
 
   int sweepflag;               // set if rejection KMC solver
   int sectorflag;              // 1 if partition my domain into sectors
