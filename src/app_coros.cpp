@@ -134,11 +134,8 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   nbulkfe = 0;
   nbulkcu = 0;
 
-  // parameter for barrier_extract and data_extract by LC
-  // event step
-  eventstep =0;
+  // parameter for barrier_extract  by LC
   extract_flag = 0;
-  //attemptfrequency = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -454,7 +451,7 @@ void Appcoros::input_app(char *command, int narg, char **arg)
   // command to enable propensity/barrier extraction
   else if (strcmp(command, "barrier_extract") ==0) {
     if(narg != 1) error->all(FLERR,"illegal barrier_extract command");
-    extract_flag = atoi(arg[0]); // extract flag is on if = 1
+    extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
   }
     // check salt souce that the potential should be contant 10 value;
 /*      for (i = 0; i < nlocal; i++){
@@ -957,21 +954,6 @@ void Appcoros::site_event(int i, class RandomPark *random)
       element[j] = k;
       potential[j] = kp; //LC swap salt potential
     }
-    // after swithbe before update propensity
-    // print out the propensity and propensity of the switch
-    //fprintf(screen,"propensity %d ebarrier %d \n",hpropensity,ebarrier);
-    //fprintf(screen,"prob_hop %d \n",prob_hop);
-    //fprintf(screen,"step %d \n",t);
-    //fprintf(screen,"events[ievent].propensity %d \n",events[ievent].propensity);
-    //fprintf(screen,"proball %d \n",proball);
-
-    // if enable extract_flag then print out all event propensity
-    // and the select events propensity
-    // this feature may takes a lot of memory, be caution!.
-    if(extract_flag == 2){
-      data_extract(ievent);
-    }
-
 
     update_propensity(i);
     update_propensity(j);
@@ -3052,73 +3034,14 @@ void Appcoros::grow_saltdiffusion()
   memory->grow(salt_bfreq,n,"app/coros:salt_bfreq");
   memory->grow(salt_time_old,n,"app/coros:salt_time_old");
   memory->grow(salt_time_new,n,"app/coros:salt_time_new");
-  //memory->grow(rdamp,n,"app/coros:rdamp");
-  //memory->grow(pn_local,n,"app/coros:pn_local");
-  //memory->grow(pn_global,n,"app/coros:pn_global");
-  //memory->grow(xmix,n,m,"app/coros:xmix");
-  //memory->grow(pmix,n,nlocal,"app/coros:pmix");
 }
 
-
 /* ----------------------------------------------------------------------
-  fprintf function for print out all ebarrier, propensity and what event is apply
-  with its specific ebarrier
-  maybe include what type of event
-  this fprintf function is inside site_event function and execute after switch before
-  update the propensity
-
-  !!if enable this function in normal system, there are too many event to output
-  !!if may run out of memory and crash the program
-  !!another choice: output as time step
-------------------------------------------------------------------------- */
-int Appcoros::data_extract(int ievent)
-{
-  // after switch before update propensity
-
-  // print out the propensity and propensity of the selected switch
-  int rstyle = events[ievent].style;
-  double propensity = events[ievent].propensity;
-
-  eventstep ++;
-  //!! need to find out a way to extract time
-  //print out the rstyle and the propensity of the selected event
-
-  fprintf(screen,"rstyle and propensity of selected event: \n");
-  fprintf(screen,"step: %d rstyle: %d propensity: %f \n",eventstep, rstyle, propensity); // the event's propensity
-
-  // print out all event from event list
-  fprintf(screen,"list of rstyle and propensity at step %d \n", eventstep);
-  for(int i = 0; i < nevents; i ++) {
-    rstyle = events[i].style;
-    propensity = events[i].propensity;
-    fprintf(screen,"rstyle: %d propensity: %f \n",rstyle, propensity);
-  return eventstep;
-  }
-}
-/* ----------------------------------------------------------------------
-  fprintf function for print out all ebarrier, propensity and what event is apply
-  coupling with diag_coros
-  this function can output all propensity every diag_output and
-  return the number of output(not necessary, just for check)
-------------------------------------------------------------------------- */
-int Appcoros::data_extract_diag()
-{
-  int rstyle;
-  double propensity;
-  double b ; // for barrier
-  eventstep ++;
-  fprintf(screen,"list of rstyle and propensity at step %d \n", eventstep);
-  for(int i = 0; i < nevents; i ++) {
-    rstyle = events[i].style;
-    propensity = events[i].propensity;
-    //b = -KBT * log(propensity / attemptfrequency);
-    fprintf(screen,"rstyle: %d propensity: %e \n",rstyle, propensity);
-  }
-  return eventstep;
-}
-/* ----------------------------------------------------------------------
-  print all propensity and barrier no matter, but it will only focus on the updated one.
-  preventing double counting
+  print every update propensity and barrier no matter, in "site_propensity" function
+  it will only focus on the updated one.
+  preventing double counting.
+  format:
+  rstyle: 1 propensity: 1.138301e-05 frequency: 4.470000 bond_ratio: 1.000000 barrier: 0.525000
 ------------------------------------------------------------------------- */
 void Appcoros::barrier_print(int r, double propensity, double frequency,double ratio, double barrier){
 

@@ -123,7 +123,6 @@ class Appcoros : public AppLattice {
 
   //parameter for barrier_extract and data_extract
   int extract_flag;
-  int eventstep;           // ith event during KMC time.
 
   struct Event {           // one event for an owned site
     int style;             // reaction style = HOP,RECOMBINE
@@ -193,9 +192,7 @@ class Appcoros : public AppLattice {
   void grow_saltdiffusion();// grow memory for salt diffusion
   void salt_remove(int i); //remove salt potential after reaction by LC
   int count_salt(); // count salt if i3 =1
-  int data_extract(int i); // this function fprintf ebarrier and propensity for each jump
-  int data_extract_diag();
-  void barrier_print(int r,double i, double j, double k, double l);
+  void barrier_print(int r,double i, double j, double k, double l); //by LC
 };
 
 }
