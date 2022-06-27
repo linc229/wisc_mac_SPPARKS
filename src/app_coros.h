@@ -40,6 +40,7 @@ class Appcoros : public AppLattice {
 
  private:
   int engstyle,nn1flag,nn2flag,barrierflag,diffusionflag; // 1NN or 2NN bonds
+  int attemptfrequencyflag; // flag for attempt frequency by LC
   int ndiffusion;
   int *type,*element,*aid; // variables on each lattice site
   int firsttime;
@@ -58,6 +59,7 @@ class Appcoros : public AppLattice {
   double *mbarrier; //migration barriers
   double *surfbarrier; //migration barrier for surface diffusion by LC
   int *hcount;
+  double *attemptfrequency; // attempt freqency for all diffusion by LC
 
   int nreact; // number of reaction events by LC
   int nsurffe; // number of surf diffusion event for id2 = 1 by LC
@@ -119,6 +121,10 @@ class Appcoros : public AppLattice {
   int n_update_list;
   int update_list[200]; //set array size 200
 
+  //parameter for barrier_extract and data_extract
+  int extract_flag;
+  int eventstep;           // ith event during KMC time.
+
   struct Event {           // one event for an owned site
     int style;             // reaction style = HOP,RECOMBINE
     int which;             // which reaction of this type
@@ -132,6 +138,7 @@ class Appcoros : public AppLattice {
   int maxevent;            // max # of events list can hold
   int *firstevent;         // index of 1st event for each owned site
   int freeevent;           // index of 1st unused event in list
+
 
   int ibonde(int, int, int);  //list to matrix bond energy
   void define_2NN();
@@ -186,6 +193,9 @@ class Appcoros : public AppLattice {
   void grow_saltdiffusion();// grow memory for salt diffusion
   void salt_remove(int i); //remove salt potential after reaction by LC
   int count_salt(); // count salt if i3 =1
+  int data_extract(int i); // this function fprintf ebarrier and propensity for each jump
+  int data_extract_diag();
+  void barrier_print(int r,double i, double j, double k, double l);
 };
 
 }

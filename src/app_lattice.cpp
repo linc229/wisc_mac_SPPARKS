@@ -489,6 +489,7 @@ void AppLattice::iterate_kmc_global(double stoptime)
     if(frenkelpair_flag && dt_step > min_fpfreq) dt_step = min_fpfreq; //Yongfeng, double check later!!!
     if (isite >= 0) {
       time += dt_step;
+       
       if (concentrationflag) concentration_field(dt_step); //yongfeng, integrate concentration every step
       if (time_flag) { //yongfeng
          time_tracer(dt_step);
