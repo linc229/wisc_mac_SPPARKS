@@ -57,15 +57,13 @@ class Appcoros : public AppLattice {
   double **ebond1,**ebond2; //bond energy
   double **disp; //atomic displacement
   double *mbarrier; //migration barriers
-  double *surfbarrier; //migration barrier for surface diffusion by LC
+  //double *surfbarrier; //migration barrier for surface diffusion by LC comment 0704
   int *hcount;
   double *attemptfrequency; // attempt freqency for all diffusion by LC
 
   int nreact; // number of reaction events by LC
-  int nsurffe; // number of surf diffusion event for id2 = 1 by LC
-  int nsurfcu; // number of surf diffusion event for id2 = 3 by LC
-  int nbulkfe; // number of bulk diffusion event for id2 = 1 by LC
-  int nbulkcu; // number of bulk diffusion event for id2 = 3 by LC
+  //int nbulkfe; // number of bulk diffusion event for id2 = 1 by LC
+  //int nbulkcu; // number of bulk diffusion event for id2 = 3 by LC
 
   int nbulk;
   int ninterface;
@@ -186,9 +184,9 @@ class Appcoros : public AppLattice {
   void time_tracer(double); //track time
   void concentration_field(); //calculation concentration field
   double real_time(double); //compute fvt
-  void update_region(int i,int j, int r); // // update type after events
-  int update_neighbor_check(int l); //update and return number of old list
-  int update_surface_diff(int i); // update surface diff
+  //void update_region(int i,int j, int r); // // update type after events
+  //int update_neighbor_check(int l); //update and return number of old list
+  //int update_surface_diff(int i); // update surface diff
   void count_type();// to count each type
   void potential_diff(); //perform salt potential_diffusion
   void check_saltdiffusion(double); // check salt diffusion and time

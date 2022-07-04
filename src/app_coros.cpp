@@ -129,10 +129,8 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
 
   // number of each events by LC
   nreact = 0;
-  nsurffe = 0;
-  nsurfcu = 0;
-  nbulkfe = 0;
-  nbulkcu = 0;
+  //nbulkfe = 0; // comment but keep it
+  //nbulkcu = 0;
 
   // parameter for barrier_extract  by LC
   extract_flag = 0;
@@ -270,11 +268,9 @@ void Appcoros::input_app(char *command, int narg, char **arg)
 
   // migration barriers for each element
   else if (strcmp(command, "migbarrier") ==0) {
-
     if (narg < 2 || narg % 2 != 0) error->all(FLERR,"Illegal migbarrier command");
     barrierflag = 1;
     memory->create(mbarrier,nelement+1,"app/coros:mbarrier");
-
     for (i=0; i<narg-1; i++) {
       if(i % 2 == 0){ j = atoi(arg[i]);
         mbarrier[j] = atof(arg[i+1]);
@@ -282,28 +278,19 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     }
   }
 
-// attempt frequency for all kinds diffusion by LC
+// attempt frequency for vacancy diffusion for each particle by LC
 // the frequency can also used for time scale conversion...
 // the unit is Thz = 10^12 Hz = 10^12 1/s = 1/ps
   else if (strcmp(command, "attemptfrequency") ==0) {
-    /*
-    if(narg != 1) error->all(FLERR,"illegal attempt frequency command");
-    attemptfrequency = atoi(arg[0]); // diffusion frequency
-    */
-/* trial for separate attemptfrequency for different particle, some error/bug */
   if (narg < 2 || narg % 2 != 0) error->all(FLERR,"Illegal attempt frequency command");
   attemptfrequencyflag = 1;
   memory->create(attemptfrequency,nelement+1,"app/coros:attemptfrequency");
-
   for (i=0; i<narg-1; i++) {
     if(i % 2 == 0){ j = atoi(arg[i]);
       attemptfrequency[j] = atof(arg[i+1]);
     }
   }
-
 }
-
-
 
   // time intervals used to estimate solute trapping
   /*
@@ -741,14 +728,7 @@ double Appcoros::site_SP_energy(int i, int j, int estyle)
   element[i] = iele;
   //barrier = migbarrier + (eng_after - eng_before)/2.0;
   eng = mbarrier[element[j]] + (eng1i + eng1j - eng0i -eng0j);
-//!!diable surface diffuse by LC
-/*
-  //if starting atom is interface atom,
-  //barrier = surfbarrier[i] + (eng_after - eng_before)/2.0;
-  if(type[i] == 2){
-    eng = surfbarrier[element[i]] + (eng1i + eng1j - eng0i -eng0j);
-  }
-*/
+
   //add elastic contribution if applicable
   /* comment because assume no elastic interaction
   if(elastic_flag) {
@@ -786,7 +766,6 @@ double Appcoros::site_propensity(int i)
   // propensity for reactions, only when flagged and enabled
   // zero barrier event are dealted with separately in site_events()
   // barriers are from input
-  ///*
   if(reaction_flag) { //reaction flag
     for(j = 0; j < nreaction; j++) {
       if(renable[j] == 0) continue;
@@ -807,7 +786,7 @@ double Appcoros::site_propensity(int i)
 
         if(!(sink_flag && isink[i][jid -1] == 1)) {//production at sinks allowed
           ebarrier = rbarrier[j];
-          //* elastic
+          // elastic
           /*
           if(elastic_flag) ebarrier += elastic_energy(i,jid) - elastic_energy(i,iid);
           */
@@ -816,9 +795,9 @@ double Appcoros::site_propensity(int i)
 
           // barrier/propensity print out by LC !!need double check
           if (extract_flag==1){
-          bond_ratio = 1;
-          r = 2;
-          barrier_print(r, hpropensity, rrate[j], bond_ratio, ebarrier);
+            bond_ratio = 1;
+            r = 2;
+            barrier_print(r, hpropensity, rrate[j], bond_ratio, ebarrier);
           }
           //
           add_event(i,jid,2,j,hpropensity);
@@ -831,41 +810,6 @@ double Appcoros::site_propensity(int i)
 
   if (element[i] != VACANCY) return prob_reaction;
 
-/*  diable surface diffusion
-  //nothing happen in salt region, for skipping event 3
-  //disable diffusion in salt region
-  if(type[i]==3){return prob_reaction; //error here because it return nothing, but this function should return double
-  }
-  // for hop event previous, only vac at bulk region can diffuse
-  // disable bulk metal to diffuse
-  if (element[i] != VACANCY && type[i] != 2) {return prob_reaction;} //disable bulk metal to diffuse
-  int k1, k2, j1, j2, numneighmetal;
-  // surface diffusion
-  // enable adatom at interface can diffuse
-  if (type[i]==2){
-    for (k1 = 0; k1 < numneigh[i]; k1++){
-      j1 = neighbor[i][k1]; // site j1 = neighbor of site i
-      // disable adatom to diffuse with bulk region to prevent double diffusion
-      if (type[j1]==3){ // allow surface diffuse with vac at salt region
-        numneighmetal = 0;
-        for (k2=0; k2<numneigh[j1]; k2++){
-          j2 = neighbor[j1][k2]; //site j2 = neighbor of site j1
-          //surface diff is surface atom i migrate to j1 if j1 has at least one metal atom(keeping bonding)
-          if (j2!=i && element[j2] !=2){ //count neighbor of j1 if j2 is metal atom, then ++;
-            numneighmetal++;
-          }
-        }
-        if (numneighmetal > 0){ // if j1 has at least 1 neighbor atom except i then enable surfac diffuse
-          ebarrier = site_SP_energy(i,j1,engstyle); // diffusion barrier
-          hpropensity = exp(-ebarrier/KBT);
-          add_event(i,j1,1,-1,hpropensity);
-          prob_hop += hpropensity;
-        }
-      }
-    }
-    return prob_hop + prob_reaction;
-  }
-*/
   // check if acceleration is needed and update propensity if so
   /*
   if (acceleration_flag == 1 ) {
@@ -885,29 +829,27 @@ double Appcoros::site_propensity(int i)
     if(element[jid] != VACANCY) { // no vacancy-vacancy switch
       ebarrier = site_SP_energy(i,jid,engstyle); // diffusion barrier
 
-      //surface effect = bond ratio = Nbond/Ntotal
+      // surface effect section
       sum_bond = 0;
       sum_total = 0;
       bond_ratio = 0.0;
       for (k = 0; k < numneigh[jid]; k++){
         sum_total++;
         if (element[neighbor[jid][k]]!= VACANCY){
-          sum_bond++;
+            sum_bond++;
         }
       }
       bond_ratio = (sum_bond+1.0)/sum_total;
       r = 1;
-      //
-
       // surface effect = exp(-(NTotal- (Nbond +1 ))/b)
       surface_effect = 0.0;
-      //b = 5.0;
       surface_effect = exp(-(sum_total-(sum_bond+1.0))/surface_effect_b);
+      //
 
       hpropensity = attemptfrequency[element[jid]] * exp(-ebarrier * surface_effect/KBT);
       if (extract_flag==1){
-      barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
-    }
+          barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
+      }
       add_event(i,jid,1,-1,hpropensity);
       prob_hop += hpropensity;
     }
@@ -974,18 +916,13 @@ void Appcoros::site_event(int i, class RandomPark *random)
     hcount[element[i]] ++;
 
     // this part is count number of diffusion for each elements by LC
+    // not use but keep it
     /*
     if(element[i] == 1 && element[j] == 2){ // bulk diff of id2 = 1
       nbulkfe ++;
     }
     if(element[i] == 3 && element[j] == 2){ // bulk diff of id2 = 3
       nbulkcu ++;
-    }
-    if(element[i] == 2 && element[j] == 1){ // surf diff of id2 = 1
-      nsurffe ++;
-    }
-    if(element[i] == 2 && element[j] == 3){ // surf diff of id2 = 3
-      nsurfcu ++;
     }
     */
 
@@ -1114,9 +1051,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
     }
     */
   }
-// perform salt_potential diff every certain time
-//!! move to salt_diffusion check
-  //potential_diff();
+
 
 //!! disable interface check by LC
 /*
@@ -2715,8 +2650,13 @@ void Appcoros::trapozidal(double omegas[100], double XP[9][100], int j, int k, d
 }
 
 /* ----------------------------------------------------------------------
-  update region
+  Below functions are created by LC
 ------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+  update region; comment but keep
+------------------------------------------------------------------------- */
+/*
 void Appcoros::update_region(int i,int j, int r)
 {
   //define varialbes
@@ -2756,11 +2696,13 @@ void Appcoros::update_region(int i,int j, int r)
     n_update_list = update_neighbor_check(n_update_list); // assign new list to old list
   }
 }
+*/
 /* ----------------------------------------------------------------------
   update region_loop
   !!currently check every neighbor if it is salt region(type3)
   !!may check the effeciency in the future
 ------------------------------------------------------------------------- */
+/*
 int Appcoros::update_neighbor_check(int l)
 {
 // i2 = element[i]; i1 = type[i]
@@ -2807,11 +2749,12 @@ for (k = 0; k<num_list; k++){ // assign the temp store value to update_list arra
 }
 return num_list;
 }
+*/
 /* ----------------------------------------------------------------------
   update region check for surface diffusion
-  !!current same for update_neighbor_check function
-  !!may combine with it if needed
+  comment but keep
 ------------------------------------------------------------------------- */
+/*
 int Appcoros::update_surface_diff(int i){
 int num_list = 0;
 int numneighmetal = 0;
@@ -2854,38 +2797,7 @@ for (k = 0; k<num_list; k++){
 }
 return num_list;
 }
-
-/* ----------------------------------------------------------------------
-  update region check for surface diffusion
-  !!current same for update_neighbor_check function
-  !!may combine with it if needed
-------------------------------------------------------------------------- */
-void Appcoros::count_type(){
-  //int nbulk;
-  //int ninterface;
-  //int nsalt;
-int num_bulk = 0, num_interface = 0, num_salt = 0;
-int i;
-for (i = 0; i < nlocal; i++){
-  if(type[i] ==1){
-    num_bulk ++;
-  }
-  if(type[i] ==2){
-    num_interface ++;
-  }
-  /*if(type[i] ==3){
-    num_salt ++;
-  }*/
-  if(potential[i] == 1){
-    num_salt ++;
-  }
-}
-nbulk = num_bulk;
-ninterface = num_interface;
-//nsalt = num_salt;
-nsalt = num_salt;
-}
-
+*/
 /* ----------------------------------------------------------------------
   count number of salt in lattice if i3 = 1, output to diag_coros.cpp file
 ------------------------------------------------------------------------- */
@@ -2901,7 +2813,7 @@ return num_salt;
 }
 /* ----------------------------------------------------------------------
   function for salt/potential diffusion
-
+  may be improved in count_salt part
 ------------------------------------------------------------------------- */
 void Appcoros::potential_diff(){
 int i, j,k, kd;
@@ -3007,18 +2919,12 @@ int sum = 0;
       jid = neighbor_list[iwhich];
     }
   }
-    //sum ++;
-    //if (sum >100){ // temparary exception
-    //  check_label = 1;
-    //  rand_index = 0;
-    //}
   // assign array id to lattice id
   //jid = neighbor_list[rand_index];
   // remove salt by set potential 1 -->> 0
   potential[jid] = 0;
 update_propensity(jid);
 }
-
 
 /* ----------------------------------------------------------------------
    check if perform salt diffusion
