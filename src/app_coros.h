@@ -124,6 +124,9 @@ class Appcoros : public AppLattice {
   //parameter for barrier_extract and data_extract
   int extract_flag;
 
+  //parameter for surface_effect
+  double surface_effect_b;
+
   struct Event {           // one event for an owned site
     int style;             // reaction style = HOP,RECOMBINE
     int which;             // which reaction of this type

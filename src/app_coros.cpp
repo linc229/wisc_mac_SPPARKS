@@ -303,6 +303,8 @@ void Appcoros::input_app(char *command, int narg, char **arg)
 
 }
 
+
+
   // time intervals used to estimate solute trapping
   /*
   else if (strcmp(command, "time_tracer") ==0) {
@@ -460,7 +462,12 @@ void Appcoros::input_app(char *command, int narg, char **arg)
         }
       }
 */
+// take surface diffusion as exponential function
+else if (strcmp(command, "surfaceeffect") ==0) {
 
+  if(narg != 1) error->all(FLERR,"illegal surfaceeffect command");
+  surface_effect_b = atoi(arg[0]);
+}
 
 /*
   else if (strcmp(command, "ballistic") ==0) {
@@ -766,6 +773,8 @@ double Appcoros::site_propensity(int i)
   // !!parameter for surface diffusion by LC
   int sum_bond,sum_total, r;
   double bond_ratio;
+  double b;
+  double surface_effect;
   // valid hop and recombination tabulated lists
   // propensity for each event is input by user
   clear_events(i);
@@ -876,7 +885,7 @@ double Appcoros::site_propensity(int i)
     if(element[jid] != VACANCY) { // no vacancy-vacancy switch
       ebarrier = site_SP_energy(i,jid,engstyle); // diffusion barrier
 
-      //bond ratio = Nbond/Ntotal
+      //surface effect = bond ratio = Nbond/Ntotal
       sum_bond = 0;
       sum_total = 0;
       bond_ratio = 0.0;
@@ -890,9 +899,14 @@ double Appcoros::site_propensity(int i)
       r = 1;
       //
 
-      hpropensity = attemptfrequency[element[jid]] * exp(-ebarrier * bond_ratio/KBT);
+      // surface effect = exp(-(NTotal- (Nbond +1 ))/b)
+      surface_effect = 0.0;
+      //b = 5.0;
+      surface_effect = exp(-(sum_total-(sum_bond+1.0))/surface_effect_b);
+
+      hpropensity = attemptfrequency[element[jid]] * exp(-ebarrier * surface_effect/KBT);
       if (extract_flag==1){
-      barrier_print(r, hpropensity, attemptfrequency[element[jid]], bond_ratio, ebarrier);
+      barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
     }
       add_event(i,jid,1,-1,hpropensity);
       prob_hop += hpropensity;
