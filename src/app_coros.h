@@ -188,7 +188,7 @@ class Appcoros : public AppLattice {
   //int update_neighbor_check(int l); //update and return number of old list
   //int update_surface_diff(int i); // update surface diff
   void count_type();// to count each type
-  void potential_diff(); //perform salt potential_diffusion
+  void potential_diff(int nsalt); //perform salt potential_diffusion
   void check_saltdiffusion(double); // check salt diffusion and time
   void grow_saltdiffusion();// grow memory for salt diffusion
   void salt_remove(int i); //remove salt potential after reaction by LC

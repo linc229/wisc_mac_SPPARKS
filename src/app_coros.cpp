@@ -2815,16 +2815,16 @@ return num_salt;
   function for salt/potential diffusion
   may be improved in count_salt part
 ------------------------------------------------------------------------- */
-void Appcoros::potential_diff(){
+void Appcoros::potential_diff(int nsalt){
 int i, j,k, kd;
 int iid, jid;
 int check_label;
 int iwhich;
 int sum = 0;
 int sum_kd = 0;
-int nsalt;
+//int nsalt;
 double rand_i;
-nsalt = count_salt(); // count salt in lattice
+//nsalt = count_salt(); // count salt in lattice
   if (nsalt == 0){return;} // exception, if no salt, no diffusion
 
 // step 1 find one randon site i which potential = 1 from all lattice(nlocal)
@@ -2932,13 +2932,18 @@ update_propensity(jid);
 void Appcoros::check_saltdiffusion(double t)
 {
   int nmix = 0;
+  int nsalt = 0;
   for(int i = 0; i < nsaltdiffusion; i ++) {
      salt_time_new[i] = static_cast<int>(t/salt_bfreq[i]);
      nmix = salt_time_new[i] - salt_time_old[i];
 
+     nsalt = count_salt(); // count salt in lattice
+     // temp check print
+     //fprintf(screen,"nmix: %d; nsalt: %d; \n",nmix, nsalt);
+
      while (nmix) {  //perform mixing nmix times
        nmix --;
-       potential_diff();
+       potential_diff(nsalt);
        if(nmix == 0) salt_time_old[i] = salt_time_new[i];  //update time
     }
   }
