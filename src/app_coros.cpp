@@ -2939,7 +2939,8 @@ void Appcoros::check_saltdiffusion(double t)
 
      nsalt = count_salt(); // count salt in lattice
      // temp check print
-     //fprintf(screen,"nmix: %d; nsalt: %d; \n",nmix, nsalt);
+     //fprintf(screen,"nmix: %d; nsalt: %d;KMC time: %d; impurity diffuse time: %d; \n",nmix, nsalt, t, salt_bfreq[i]);
+     fprintf(screen,"nmix: %d; KMC time: %f; impurity diffuse time: %f; time_new: %d; time_old: %d \n",nmix, t, salt_bfreq[i]), salt_time_new[i],salt_time_old[i] ;
 
      while (nmix) {  //perform mixing nmix times
        nmix --;
