@@ -121,6 +121,7 @@ class Appcoros : public AppLattice {
 
   //parameter for barrier_extract and data_extract
   int extract_flag;
+  int evap_extract_flag;
 
   //parameter for surface_effect
   double surface_effect_b;
@@ -148,7 +149,7 @@ class Appcoros : public AppLattice {
   double add_acceleration_event(int, int); // add acceleration event and return a probability
   double total_energy();
   double sites_energy(int, int);
-  double site_SP_energy(int, int, int);
+  double site_SP_energy(int, int, int, double);
 
   void grow_reactions(); //reactions
   void check_reaction();

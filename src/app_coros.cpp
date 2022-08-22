@@ -134,6 +134,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
 
   // parameter for barrier_extract  by LC
   extract_flag = 0;
+  evap_extract_flag = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -442,6 +443,12 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     if(narg != 1) error->all(FLERR,"illegal barrier_extract command");
     extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
   }
+
+  else if (strcmp(command, "evap_extract") ==0) {
+    if(narg != 1) error->all(FLERR,"illegal evap_extract command");
+    evap_extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
+  }
+
     // check salt souce that the potential should be contant 10 value;
 /*      for (i = 0; i < nlocal; i++){
         if (type[i] == saltsite){
@@ -710,7 +717,7 @@ double Appcoros::elastic_energy(int i, int itype)
   compute barriers for an exchange event between i & j
 ------------------------------------------------------------------------- */
 
-double Appcoros::site_SP_energy(int i, int j, int estyle)
+double Appcoros::site_SP_energy(int i, int j, int estyle, double s)
 {
   double eng = 0.0;
   double eng0i, eng0j, eng1i, eng1j; //energy before and after jump
@@ -726,8 +733,8 @@ double Appcoros::site_SP_energy(int i, int j, int estyle)
   // switch back
   element[j] = jele;
   element[i] = iele;
-  //barrier = migbarrier + (eng_after - eng_before)/2.0;
-  eng = mbarrier[element[j]] + (eng1i + eng1j - eng0i -eng0j);
+  //barrier = migbarrier * surface_effect + (eng_after - eng_before)/2.0;
+  eng = mbarrier[element[j]] * s + (eng1i + eng1j - eng0i -eng0j);
 
   //add elastic contribution if applicable
   /* comment because assume no elastic interaction
@@ -752,6 +759,8 @@ double Appcoros::site_propensity(int i)
 
   // !!parameter for surface diffusion by LC
   int sum_bond,sum_total, r;
+  int num_iter = 0;
+  int sum_atom = 0;
   double bond_ratio;
   double b;
   double surface_effect;
@@ -795,9 +804,9 @@ double Appcoros::site_propensity(int i)
 
           // barrier/propensity print out by LC !!need double check
           if (extract_flag==1){
-            bond_ratio = 1;
+            surface_effect = 1;
             r = 2;
-            barrier_print(r, hpropensity, rrate[j], bond_ratio, ebarrier);
+            barrier_print(r, hpropensity, rrate[j], surface_effect, ebarrier);
           }
           //
           add_event(i,jid,2,j,hpropensity);
@@ -826,9 +835,10 @@ double Appcoros::site_propensity(int i)
 
   for (j = 0; j < numneigh[i]; j++) {
     jid = neighbor[i][j];
-    if(element[jid] != VACANCY) { // no vacancy-vacancy switch
-      ebarrier = site_SP_energy(i,jid,engstyle); // diffusion barrier
 
+
+    if(element[jid] != VACANCY) { // no vacancy-vacancy switch
+      sum_atom++;
       // surface effect section
       sum_bond = 0;
       sum_total = 0;
@@ -845,15 +855,28 @@ double Appcoros::site_propensity(int i)
       surface_effect = 0.0;
       surface_effect = exp(-(sum_total-(sum_bond+1.0))/surface_effect_b);
       //
+      ebarrier = site_SP_energy(i,jid,engstyle, surface_effect); // diffusion barrier
+      hpropensity = attemptfrequency[element[jid]] * exp(-ebarrier/KBT);
 
-      hpropensity = attemptfrequency[element[jid]] * exp(-ebarrier * surface_effect/KBT);
+      // extract all case info
       if (extract_flag==1){
           barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
       }
+
+
+
       add_event(i,jid,1,-1,hpropensity);
       prob_hop += hpropensity;
+      //num_iter++;
     }
   }
+
+  // extract evaporation case info
+  if (evap_extract_flag ==1 && sum_atom == 1){
+    fprintf(screen,"sum_add: %d \n",sum_atom);
+    barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
+  }
+
   return prob_hop + prob_reaction;
 }
 
@@ -2971,5 +2994,5 @@ void Appcoros::grow_saltdiffusion()
 ------------------------------------------------------------------------- */
 void Appcoros::barrier_print(int r, double propensity, double frequency,double ratio, double barrier){
 
-  fprintf(screen,"rstyle: %d propensity: %e frequency: %f bond_ratio: %f barrier: %f \n",r, propensity,frequency,ratio, barrier);
+  fprintf(screen,"rstyle: %d propensity: %e frequency: %f surface_effect: %f barrier: %f \n",r, propensity,frequency,ratio, barrier);
 }
