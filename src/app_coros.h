@@ -122,6 +122,7 @@ class Appcoros : public AppLattice {
   //parameter for barrier_extract and data_extract
   int extract_flag;
   int evap_extract_flag;
+  int np_extract_flag;
 
   //parameter for surface_effect
   double surface_effect_b;
@@ -195,6 +196,7 @@ class Appcoros : public AppLattice {
   void salt_remove(int i); //remove salt potential after reaction by LC
   int count_salt(); // count salt if i3 =1
   void barrier_print(int r,double i, double j, double k, double l); //by LC
+  void np_check(int i, int jid); //by LC
 };
 
 }

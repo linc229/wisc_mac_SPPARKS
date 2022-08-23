@@ -135,6 +135,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   // parameter for barrier_extract  by LC
   extract_flag = 0;
   evap_extract_flag = 0;
+  np_extract_flag = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -448,6 +449,10 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     if(narg != 1) error->all(FLERR,"illegal evap_extract command");
     evap_extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
   }
+  else if (strcmp(command, "np_extract") ==0) {
+    if(narg != 1) error->all(FLERR,"illegal np_extract command");
+    np_extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
+  }
 
     // check salt souce that the potential should be contant 10 value;
 /*      for (i = 0; i < nlocal; i++){
@@ -697,7 +702,7 @@ double Appcoros::sites_energy(int i, int estyle)
     }
   }
 
-  return eng/2.0;
+  return eng;
 }
 
 /* ----------------------------------------------------------------------
@@ -734,7 +739,7 @@ double Appcoros::site_SP_energy(int i, int j, int estyle, double s)
   element[j] = jele;
   element[i] = iele;
   //barrier = migbarrier * surface_effect + (eng_after - eng_before)/2.0;
-  eng = mbarrier[element[j]] * s + (eng1i + eng1j - eng0i -eng0j);
+  eng = mbarrier[element[j]] * s + (eng1i + eng1j - eng0i -eng0j)/2;
 
   //add elastic contribution if applicable
   /* comment because assume no elastic interaction
@@ -803,11 +808,11 @@ double Appcoros::site_propensity(int i)
           hpropensity = rrate[j] * sum_kd * exp(-ebarrier/KBT);
 
           // barrier/propensity print out by LC !!need double check
-          if (extract_flag==1){
-            surface_effect = 1;
-            r = 2;
-            barrier_print(r, hpropensity, rrate[j], surface_effect, ebarrier);
-          }
+          // if (extract_flag==1){
+          //   surface_effect = 1;
+          //   r = 2;
+          //   barrier_print(r, hpropensity, rrate[j], surface_effect, ebarrier);
+          // }
           //
           add_event(i,jid,2,j,hpropensity);
           prob_reaction += hpropensity;
@@ -816,9 +821,7 @@ double Appcoros::site_propensity(int i)
     }
   }
 
-
   if (element[i] != VACANCY) return prob_reaction;
-
   // check if acceleration is needed and update propensity if so
   /*
   if (acceleration_flag == 1 ) {
@@ -832,11 +835,8 @@ double Appcoros::site_propensity(int i)
 */
   // for hop events, vacancy only currently
   // propensity calculated in site_SP_energy();
-
   for (j = 0; j < numneigh[i]; j++) {
     jid = neighbor[i][j];
-
-
     if(element[jid] != VACANCY) { // no vacancy-vacancy switch
       sum_atom++;
       // surface effect section
@@ -850,7 +850,7 @@ double Appcoros::site_propensity(int i)
         }
       }
       bond_ratio = (sum_bond+1.0)/sum_total;
-      r = 1;
+      r = 1; // rstyle = 1
       // surface effect = exp(-(NTotal- (Nbond +1 ))/b)
       surface_effect = 0.0;
       surface_effect = exp(-(sum_total-(sum_bond+1.0))/surface_effect_b);
@@ -863,20 +863,24 @@ double Appcoros::site_propensity(int i)
           barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
       }
 
-
+      // extract non-positive barrier case info
+      if (np_extract_flag ==1 && r ==1 && ebarrier <= 0.0){
+        //fprintf(screen,"sum_add: %d \n",sum_atom);
+        np_check(i,jid);
+        barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
+      }
 
       add_event(i,jid,1,-1,hpropensity);
       prob_hop += hpropensity;
       //num_iter++;
     }
   }
-
   // extract evaporation case info
   if (evap_extract_flag ==1 && sum_atom == 1){
-    fprintf(screen,"sum_add: %d \n",sum_atom);
+    //fprintf(screen,"sum_add: %d \n",sum_atom);
+    np_check(i,jid);
     barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
   }
-
   return prob_hop + prob_reaction;
 }
 
@@ -2995,4 +2999,46 @@ void Appcoros::grow_saltdiffusion()
 void Appcoros::barrier_print(int r, double propensity, double frequency,double ratio, double barrier){
 
   fprintf(screen,"rstyle: %d propensity: %e frequency: %f surface_effect: %f barrier: %f \n",r, propensity,frequency,ratio, barrier);
+}
+
+/* ----------------------------------------------------------------------
+  Positive check surrounding neighbor
+  and print out its surrounding neighbor atoms
+------------------------------------------------------------------------- */
+void Appcoros::np_check(int i, int jid){
+
+int i_Ni=0, i_vac=0, i_Cr=0, j_Ni=0, j_vac=0, j_Cr=0;
+int ki, kj;
+for (int n=0; n< numneigh[i]; n++){
+  ki = neighbor[i][n];
+  if(element[ki] == 1 ){i_Ni ++;}
+  if(element[ki] == 2 ){i_vac ++;}
+  if(element[ki] == 3 ){i_Cr ++;}
+  if(element[kj] == 1 ){j_Ni ++;}
+  if(element[kj] == 2 ){j_vac ++;}
+  if(element[kj] == 3 ){j_Cr ++;}
+}
+
+  double total_eng = 0.0;
+  double intrinsic_barrier = 0.0;
+  double eng0i, eng0j, eng1i, eng1j; //energy before and after jump
+  int estyle = engstyle;
+  int iele = element[i];
+  int jele = element[jid];
+  eng0i = sites_energy(i,estyle); //broken bond with i initially,
+  eng0j = sites_energy(jid,estyle); //broken bond with j initially
+  // switch the element and recalculate the site energy
+  element[i] = jele;
+  element[jid] = iele;
+  eng1i = sites_energy(i,estyle); //broken bond with i initially,
+  eng1j = sites_energy(jid,estyle); //broken bond with j initially
+  // switch back
+  element[jid] = jele;
+  element[i] = iele;
+  //barrier = migbarrier * surface_effect + (eng_after - eng_before)/2.0;
+  intrinsic_barrier = mbarrier[element[jid]];
+  total_eng = (eng1i + eng1j - eng0i -eng0j)/2;
+
+  fprintf(screen,"i_Ni: %d i_vac: %d i_Cr: %d j_Ni: %d j_vac: %d j_Cr: %d \n", i_Ni, i_vac, i_Cr, j_Ni, j_vac, j_Cr);
+  fprintf(screen,"intrinsic_barrier: %f total_eng_change: %f \n",intrinsic_barrier, total_eng);
 }
