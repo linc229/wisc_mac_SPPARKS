@@ -31,7 +31,7 @@ enum{hFE=11,hCU,hNI,hMN,hSi,hP,hC};               // hop steps for each element
 enum{sink=30};                                    // number of sink absorption
 enum{recombine=41};                               // number of recombination
 enum{dFE=71,dVACANCY,dCU,dNI,dMN,dSi,dP,dC,dSIA}; // MSD for each element
-enum{energy=81,treal,fvt};                        // energy and realistic time
+enum{energy=81,treal,fvt, metal_energy};                        // energy and realistic time
 enum{react=61, surffe, surfcu, bulkfe, bulkcu, nsalt, nsaltdiff};     // number of each events
 //!! be careful for the integer and float at line 164 when adding new variables
 /* ---------------------------------------------------------------------- */
@@ -140,6 +140,7 @@ void Diagcoros::init()
 
     else if (strcmp(list[i],"recombine") == 0) which[i] = recombine;
     else if (strcmp(list[i],"energy") == 0) which[i] = energy;
+    else if (strcmp(list[i],"metal_energy") == 0) which[i] = metal_energy;
     else if (strcmp(list[i],"treal") == 0) which[i] = treal;
     else if (strcmp(list[i],"fvt") == 0) which[i] = fvt;
 
@@ -253,6 +254,7 @@ void Diagcoros::compute()
 
     else if (which[i] == recombine) dvalue = appcoros->nrecombine; //number of reocmbination
     else if (which[i] == energy) dvalue = appcoros->total_energy(); //system energy
+    else if (which[i] == metal_energy) dvalue = appcoros->total_metal_energy(); //system energy
     else if (which[i] == treal) dvalue = appcoros->realtime; //realistic time
     else if (which[i] == fvt) dvalue = appcoros->fvt; //realistic time
 

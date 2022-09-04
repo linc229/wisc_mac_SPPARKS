@@ -197,6 +197,7 @@ class Appcoros : public AppLattice {
   int count_salt(); // count salt if i3 =1
   void barrier_print(int r,double i, double j, double k, double l); //by LC
   void np_check(int i, int jid); //by LC
+  double total_metal_energy(); // by LC
 };
 
 }

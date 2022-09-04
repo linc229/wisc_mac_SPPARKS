@@ -701,7 +701,8 @@ double Appcoros::sites_energy(int i, int estyle)
       eng += ebond2[element[i]][element[jd]];
     }
   }
-
+//!! changed by LC, the energy here is total bond energy for one site/atom,
+//!! for some cases, the site energy is shared by neighbor and need to be divided by 2
   return eng;
 }
 
@@ -860,6 +861,7 @@ double Appcoros::site_propensity(int i)
 
       // extract all case info
       if (extract_flag==1){
+          np_check(i,jid);
           barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
       }
 
@@ -1516,7 +1518,14 @@ void Appcoros::ballistic_probability(int n)
 double Appcoros::total_energy( )
 {
   double penergy = 0.0;
-  for(int i = 0; i < nlocal; i++) penergy += sites_energy(i,engstyle);
+  for(int i = 0; i < nlocal; i++) {
+
+  penergy += sites_energy(i,engstyle);
+
+  // print every site energy
+  //fprintf(screen,"id: %d particle type: %d site_energy: %f penergy: %f \n",i, element[i],sites_energy(i,engstyle),penergy/2);
+
+  }
 /*
   if(elastic_flag) {
     for(int j = 0; j < nlocal; j++) {
@@ -2950,6 +2959,7 @@ int sum = 0;
   //jid = neighbor_list[rand_index];
   // remove salt by set potential 1 -->> 0
   potential[jid] = 0;
+  potential[i] = 0;
 update_propensity(jid);
 }
 
@@ -3014,6 +3024,10 @@ for (int n=0; n< numneigh[i]; n++){
   if(element[ki] == 1 ){i_Ni ++;}
   if(element[ki] == 2 ){i_vac ++;}
   if(element[ki] == 3 ){i_Cr ++;}
+}
+
+for (int m=0; m< numneigh[jid]; m++){
+  kj = neighbor[jid][m];
   if(element[kj] == 1 ){j_Ni ++;}
   if(element[kj] == 2 ){j_vac ++;}
   if(element[kj] == 3 ){j_Cr ++;}
@@ -3025,6 +3039,7 @@ for (int n=0; n< numneigh[i]; n++){
   int estyle = engstyle;
   int iele = element[i];
   int jele = element[jid];
+  intrinsic_barrier = mbarrier[element[jid]];
   eng0i = sites_energy(i,estyle); //broken bond with i initially,
   eng0j = sites_energy(jid,estyle); //broken bond with j initially
   // switch the element and recalculate the site energy
@@ -3036,9 +3051,32 @@ for (int n=0; n< numneigh[i]; n++){
   element[jid] = jele;
   element[i] = iele;
   //barrier = migbarrier * surface_effect + (eng_after - eng_before)/2.0;
-  intrinsic_barrier = mbarrier[element[jid]];
+
   total_eng = (eng1i + eng1j - eng0i -eng0j)/2;
 
   fprintf(screen,"i_Ni: %d i_vac: %d i_Cr: %d j_Ni: %d j_vac: %d j_Cr: %d \n", i_Ni, i_vac, i_Cr, j_Ni, j_vac, j_Cr);
-  fprintf(screen,"intrinsic_barrier: %f total_eng_change: %f \n",intrinsic_barrier, total_eng);
+  fprintf(screen,"intrinsic_barrier: %f total_eng_change: %f id_i: %d id_j: %d \n",intrinsic_barrier, total_eng, i, jid);
+}
+
+/* ----------------------------------------------------------------------
+  calculating total metal energy which the particle is not VAC
+------------------------------------------------------------------------- */
+
+double Appcoros::total_metal_energy( )
+{
+  double penergy = 0.0;
+  for(int i = 0; i < nlocal; i++){
+  if(element[i] != VACANCY){
+    penergy += sites_energy(i,engstyle);
+  }
+  }
+/*
+  if(elastic_flag) {
+    for(int j = 0; j < nlocal; j++) {
+      int jtype = element[j];
+      penergy += elastic_energy(j,jtype);
+    }
+  }
+*/
+  return penergy/2.0;
 }
