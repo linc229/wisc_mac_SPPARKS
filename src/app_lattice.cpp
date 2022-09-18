@@ -85,6 +85,7 @@ AppLattice::AppLattice(SPPARKS *spk, int narg, char **arg) : App(spk,narg,arg)
   app_update_only = 0;
   reaction_flag = ballistic_flag = frenkelpair_flag = time_flag = sinkmotion_flag = clst_flag = concentrationflag = 0; //yongfeng
   saltdiffusion_flag = 0; //LC
+  KMC_stop_flag = 1;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -489,7 +490,7 @@ void AppLattice::iterate_kmc_global(double stoptime)
     if(frenkelpair_flag && dt_step > min_fpfreq) dt_step = min_fpfreq; //Yongfeng, double check later!!!
     if (isite >= 0) {
       time += dt_step;
-       
+
       if (concentrationflag) concentration_field(dt_step); //yongfeng, integrate concentration every step
       if (time_flag) { //yongfeng
          time_tracer(dt_step);
@@ -504,6 +505,11 @@ void AppLattice::iterate_kmc_global(double stoptime)
         if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
         if (diffusionflag) onsager(time); //yongfeng
         if (saltdiffusion_flag) check_saltdiffusion(time); //LC
+        // if (KMC_stop_flag) {  //LC KMC_stop
+        //   int check_point = KMC_stop();
+        //   if (check_point == 1){fprintf(screen,"stop 1\n");}
+        // }
+
         //if (ballistic_flag) sia_concentration(dt_step); // yongfeng
 	timer->stamp(TIME_APP);
       } else {
@@ -647,6 +653,10 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (concentrationflag) concentration_field(dt_kmc); //yongfeng
     //if (ballistic_flag) sia_concentration(dt_kmc); // yongfeng
     if (saltdiffusion_flag) check_saltdiffusion(time);// LC
+    if (KMC_stop_flag) {  //LC KMC_stop, if reach Cr_num_threshold
+      int check_point = KMC_stop();
+      if (check_point == 1){alldone = 1;}
+    }
 
     if (time >= stoptime) alldone = 1;
     if (alldone || time >= nextoutput) {

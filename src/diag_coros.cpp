@@ -287,6 +287,7 @@ void Diagcoros::stats(char *str)
     }
     str += strlen(str);
   }
+  appcoros->KMC_stop(); // by LC
 }
 
 /* ---------------------------------------------------------------------- */

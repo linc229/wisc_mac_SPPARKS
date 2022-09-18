@@ -123,9 +123,18 @@ class Appcoros : public AppLattice {
   int extract_flag;
   int evap_extract_flag;
   int np_extract_flag;
+  int coros_stop_flag;
+  int threshold_Cr;
 
   //parameter for surface_effect
   double surface_effect_b;
+
+  //parameter for initial particle count;
+  int total_Ni;
+  int total_vac;
+  int total_Cr;
+  int surface_Ni;
+  int surface_Cr;
 
   struct Event {           // one event for an owned site
     int style;             // reaction style = HOP,RECOMBINE
@@ -198,6 +207,7 @@ class Appcoros : public AppLattice {
   void barrier_print(int r,double i, double j, double k, double l); //by LC
   void np_check(int i, int jid); //by LC
   double total_metal_energy(); // by LC
+  int KMC_stop(); //by LC
 };
 
 }

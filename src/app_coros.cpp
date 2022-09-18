@@ -26,6 +26,8 @@
 #include "memory.h"
 #include "error.h"
 
+#include "finish.h" // added for KMC_stop by LC
+
 #include "app_lattice.h"
 
 using namespace SPPARKS_NS;
@@ -136,6 +138,14 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   extract_flag = 0;
   evap_extract_flag = 0;
   np_extract_flag = 0;
+  coros_stop_flag = 0;
+
+  // parameter for total_record by LC
+  total_Ni = 0;
+  total_vac = 0;
+  total_Cr = 0;
+  surface_Ni = 0;
+  surface_Cr = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -407,6 +417,7 @@ void Appcoros::input_app(char *command, int narg, char **arg)
 
     nreaction ++;
   }
+
   /* comment out, not using anymore, but keep it
   else if (strcmp(command, "surfacebarrier") ==0) {
 
@@ -453,7 +464,15 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     if(narg != 1) error->all(FLERR,"illegal np_extract command");
     np_extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
   }
+  // stop function based on number of corrosion event
+  else if (strcmp(command, "coros_stop") ==0) {
 
+    if(narg != 1) error->all(FLERR,"illegal coros_stop command");
+    //if(diffusionflag) error->warning(FLERR,"MSD calculated with reactions");
+    threshold_Cr = atoi(arg[0]);
+    coros_stop_flag = 1;
+
+  }
     // check salt souce that the potential should be contant 10 value;
 /*      for (i = 0; i < nlocal; i++){
         if (type[i] == saltsite){
@@ -674,6 +693,23 @@ void Appcoros::setup_app()
 
   double KB = 0.00008617;
   KBT = temperature * KB;
+  // count number of each particle at initial structure
+  int kd;
+  for (int i = 0; i < nlocal; i++) {
+    if(element[i] == FE) total_Ni++ ;
+    if(element[i] == VACANCY) total_vac++ ;
+    if(element[i] == CU) total_Cr++ ;
+
+    //count surface atom
+    int sum = 0;
+    for (int n=0; n< numneigh[i]; n++){
+      kd = neighbor[i][n];
+      if (element[kd] == VACANCY) sum++;
+    }
+    if (element[i] == FE && sum>0){surface_Ni++;}
+    if (element[i] == CU && sum>0){surface_Cr++;}
+  }
+  fprintf(screen,"surface_Ni %d surface_Cr %d\n",surface_Ni, surface_Cr );
 }
 
 /* ----------------------------------------------------------------------
@@ -999,8 +1035,9 @@ void Appcoros::site_event(int i, class RandomPark *random)
     nsites_local[k-1] --;
     nsites_local[j-1] ++;
 
-    nreact++; // count total number of reaction by LC
+
     salt_remove(i);
+
 
     // update reaction target number
     for(ii = 0; ii < nreaction; ii++) {
@@ -2930,7 +2967,7 @@ int sum = 0;
   int neighbor_list[numneigh[i]] = { -1 };
   for (k = 0; k < numneigh[i] ; k++){
     kd = neighbor[i][k];
-    if (potential[kd] == 1){
+    if (potential[kd] == 1){ //kd has impurity
       neighbor_list[k] = kd;
     }
     else {
@@ -2939,8 +2976,8 @@ int sum = 0;
     }
     //sum += neighbor_list[k];
   }
-  if (numneigh[i] == 0){return;} // exception
-  if (sum == numneigh[i]){return;}// exception
+  if (numneigh[i] == 0){return;} // exception: no neighbor
+  if (sum == numneigh[i]){return;}// exception: no impurity at neighbor
 
   // find random neighbor which site is salt
   int array_size = sizeof(neighbor_list)/sizeof(neighbor_list[0]);
@@ -2960,7 +2997,10 @@ int sum = 0;
   // remove salt by set potential 1 -->> 0
   potential[jid] = 0;
   potential[i] = 0;
-update_propensity(jid);
+  update_propensity(i);
+  update_propensity(jid);
+
+  nreact++; // count total number of reaction by LC
 }
 
 /* ----------------------------------------------------------------------
@@ -3079,4 +3119,20 @@ double Appcoros::total_metal_energy( )
   }
 */
   return penergy/2.0;
+}
+
+/* ----------------------------------------------------------------------
+  stop criteria based on number of corrosion event
+  first set 50%
+------------------------------------------------------------------------- */
+int Appcoros::KMC_stop(){
+  if (coros_stop_flag == 0) return 0;
+  double Cr_num_threshold = threshold_Cr * 0.01 * total_Cr;
+  //fprintf(screen,"Cr_num_threshold: %f\n",Cr_num_threshold );
+  double j = (float) nreact;
+  if (j >= Cr_num_threshold){
+    //fprintf(screen,"stop by reaching nreact\n");
+    return 1;
+  }
+  return 0;
 }
