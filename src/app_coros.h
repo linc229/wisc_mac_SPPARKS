@@ -208,6 +208,8 @@ class Appcoros : public AppLattice {
   void np_check(int i, int jid); //by LC
   double total_metal_energy(); // by LC
   int KMC_stop(); //by LC
+  int vac_monomer_count(); //by LC
+  void time_averaged_vac_concentration(); //by LC : calculate time-averaged vac concentration
 };
 
 }

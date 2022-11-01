@@ -3136,3 +3136,51 @@ int Appcoros::KMC_stop(){
   }
   return 0;
 }
+/* ----------------------------------------------------------------------
+vac monomer count for all lattice --> call by diag_coros.cpp
+potential[i] =0 and potential[jd] = 0 then sum_monomer++;
+------------------------------------------------------------------------- */
+int Appcoros::vac_monomer_count(){
+
+  int sum_monomer = 0;
+  int monomer_flag;
+  int jd;
+  for(int i = 0; i < nlocal; i++){  // loop all lattice
+    monomer_flag = 0;
+    if (potential[i] == 0){
+      for (int k = 0; k < numneigh[i];k++){
+          jd = neighbor[i][k];
+          if (potential[jd] == 0){
+            monomer_flag = 0;
+            break;
+          }else{monomer_flag = 1;}
+      }
+      if (monomer_flag == 1){sum_monomer++;}
+    }
+  }
+return sum_monomer;
+}
+/* ----------------------------------------------------------------------
+
+update time averaged total concentration concentrations
+average vac concentration in all lattice in time intervals
+------------------------------------------------------------------------- */
+void Appcoros::time_averaged_vac_concentration()
+{
+
+
+  // example code from app_seg
+  // if(dt_new <= 0) return;
+  // for(int i = 0; i < nelement; i++) { // ct = c*t / dt
+  //    ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
+  //    ct_new[i] = 0.0; //start recounting
+  //
+  //    for(int j = 0; j < nlocal; j++) {
+	// disp[ndiff+i][j] = ct_site[i][j]/dt_new; //time average
+	// ct_site[i][j] = 0.0; //start recounting
+  //    }
+  // }
+  // dt_new = 0.0;
+
+
+}

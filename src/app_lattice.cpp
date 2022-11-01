@@ -505,10 +505,6 @@ void AppLattice::iterate_kmc_global(double stoptime)
         if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
         if (diffusionflag) onsager(time); //yongfeng
         if (saltdiffusion_flag) check_saltdiffusion(time); //LC
-        // if (KMC_stop_flag) {  //LC KMC_stop
-        //   int check_point = KMC_stop();
-        //   if (check_point == 1){fprintf(screen,"stop 1\n");}
-        // }
 
         //if (ballistic_flag) sia_concentration(dt_step); // yongfeng
 	timer->stamp(TIME_APP);
