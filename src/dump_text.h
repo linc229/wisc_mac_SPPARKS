@@ -85,6 +85,11 @@ class DumpText : public Dump {
   void pack_propensity(int);
   void pack_iarray(int);
   void pack_darray(int);
+
+  void pack_ct_site_Ni(int);
+  void pack_ct_site_Vac(int);
+  void pack_ct_site_Cr(int);
+
 };
 
 }

@@ -24,15 +24,18 @@
 #include "memory.h"
 
 using namespace SPPARKS_NS;
-
+//Note: >dFE is floater, <dFe is integer
 enum{inter,floater};                              // data type
 enum{ZERO,FE,VACANCY,CU,NI,MN,Si,P,C,SIA};        // diagnosis terms
+//enum{FE,VACANCY,CU,NI,MN,Si,P,C,SIA};
 enum{hFE=11,hCU,hNI,hMN,hSi,hP,hC};               // hop steps for each element
 enum{sink=30};                                    // number of sink absorption
-enum{recombine=41};                               // number of recombination
-enum{dFE=71,dVACANCY,dCU,dNI,dMN,dSi,dP,dC,dSIA}; // MSD for each element
+enum{recombine=41, nmonomer};                               // number of recombination
+enum{monoFE=51, monoVACANCY, monoCU};             // number of mono-particle
+enum{react=61, surffe, surfcu, bulkfe, bulkcu, nsalt, nsaltdiff};     // number of each events
+enum{dFE=71,dVACANCY,dCU,dNI,dMN,dSi,dP,dC,dSIA}; // MSD for each element !! >dFE is floater
 enum{energy=81,treal,fvt, metal_energy};                        // energy and realistic time
-enum{react=61, surffe, surfcu, bulkfe, bulkcu, nsalt, nsaltdiff, nmonomer};     // number of each events
+enum{cVAC=91,cFE,cVACANCY,cCU, cCE4, cCE5, cCE6, cCE7, cCE8}; 	// time averaged concentration
 //!! be careful for the integer and float at line 164 when adding new variables
 /* ---------------------------------------------------------------------- */
 
@@ -89,7 +92,7 @@ void Diagcoros::init()
   siteflag = 0;
   hopflag = 0;
   msdflag = 0;
-
+ csiteflag = 0;
 
 
   for (int i = 0; i < nlist; i++) {
@@ -101,6 +104,21 @@ void Diagcoros::init()
     else if (strcmp(list[i],"p") == 0) which[i] = P;
     else if (strcmp(list[i],"c") == 0) which[i] = C;
     else if (strcmp(list[i],"sia") == 0) which[i] = SIA;
+
+    else if (strcmp(list[i],"cfe") == 0) which[i] = cFE; //time averaged concentration
+    else if (strcmp(list[i],"cvac") == 0) which[i] = cVAC;
+    else if (strcmp(list[i],"ccu") == 0) which[i] = cCU;
+    // else if (strcmp(list[i],"cce2") == 0) which[i] = cCE2;
+    // else if (strcmp(list[i],"cce3") == 0) which[i] = cCE3;
+    // else if (strcmp(list[i],"cce4") == 0) which[i] = cCE4;
+    // else if (strcmp(list[i],"cce5") == 0) which[i] = cCE5;
+    // else if (strcmp(list[i],"cce6") == 0) which[i] = cCE6;
+    // else if (strcmp(list[i],"cce7") == 0) which[i] = cCE7;
+    // else if (strcmp(list[i],"cce8") == 0) which[i] = cCE8;
+    else if (strcmp(list[i], "monofe") == 0) which[i] = monoFE;
+    else if (strcmp(list[i], "monovac") == 0) which[i] = monoVACANCY;
+    else if (strcmp(list[i], "monocu") == 0) which[i] = monoCU;
+    else if (strcmp(list[i], "nmonomer") == 0) which[i] = nmonomer;
 
     else if (strcmp(list[i],"hfe") == 0) which[i] = hFE;//total hop events
     else if (strcmp(list[i],"hcu") == 0) which[i] = hCU;
@@ -136,7 +154,7 @@ void Diagcoros::init()
     //else if (strcmp(list[i], "nbulkcu") == 0) which[i] = bulkcu;
     else if (strcmp(list[i], "nsalt") == 0) which[i] = nsalt;
     else if (strcmp(list[i], "nsaltdiff") == 0) which[i] = nsaltdiff;
-    else if (strcmp(list[i], "nmonomer") == 0) which[i] = nmonomer;
+
 
 
     else if (strcmp(list[i],"recombine") == 0) which[i] = recombine;
@@ -160,6 +178,8 @@ void Diagcoros::init()
       hopflag = 1;
     if(which[i] >= dFE && appcoros->diffusionflag == 1) msdflag = 1;
     if(which[i] >= dFE && which[i] <= dSIA && msdflag == 0) error->all(FLERR,"MSD calculation need displacement calculated in appcoros");
+    if (which[i] >= cVAC && which[i] <= cCE8)
+      csiteflag = 1;
   }
 
   for (int i = 0; i < nlist; i++) { ivector[i] = 0;
@@ -181,10 +201,19 @@ void Diagcoros::compute()
   int nlocal = appcoros->nlocal;
   int nelement = appcoros->nelement;
   double dvalue ; // double data
+  double *csites;
+  int *monosites;
   double msd[10] ;
+
 
   ninter = nfloater = 0;
   dvalue = 0.0;
+
+  // time averaged concengtration
+  if(csiteflag) {csites = appcoros->ct;
+    //appcoros-> ct_reset(); // set ct_reset_flag = 1;
+  }
+
 
   if (siteflag) {
     sites[FE] = sites[VACANCY] = sites[CU] = sites[NI] = 0;
@@ -211,7 +240,6 @@ void Diagcoros::compute()
        msd[element[i]] += appcoros->disp[3][i];
     }
   }
-
   for (int i = 0; i < nlist; i++) {
     if (which[i] == FE) ivalue = sites[FE]; //total sites
     else if (which[i] == VACANCY) ivalue = sites[VACANCY];
@@ -221,6 +249,29 @@ void Diagcoros::compute()
     else if (which[i] == P) ivalue = sites[P];
     else if (which[i] == C) ivalue = sites[C];
     else if (which[i] == SIA) ivalue = sites[SIA];
+
+    else if (which[i] == cFE) dvalue = csites[FE]; // time averaged concentration
+    else if (which[i] == cVAC) dvalue = csites[VACANCY];
+    else if (which[i] == cCU) dvalue = csites[CU];
+    // else if (which[i] == cCE2) ivalue = csites[CE2];
+    // else if (which[i] == cCE3) ivalue = csites[CE3];
+    // else if (which[i] == cCE4) ivalue = csites[CE4];
+    // else if (which[i] == cCE5) ivalue = csites[CE5];
+    // else if (which[i] == cCE6) ivalue = csites[CE6];
+    // else if (which[i] == cCE7) ivalue = csites[CE7];
+    // else if (which[i] == cCE8) ivalue = csites[CE8];
+
+    // count monomer for each particle from i2
+    else if (which[i] == monoFE){
+      appcoros-> monomer_count(); // compute monomer_count to update monomers // must have monoFe if want to count monomer
+      monosites = appcoros ->monomers; // monomers array to contain monomer for each particles
+      ivalue = monosites[FE]; //count vac monomer
+    }
+    else if (which[i] == monoVACANCY) ivalue =monosites[VACANCY]; //count vac monomer
+    else if (which[i] == monoCU) ivalue = monosites[CU]; //count vac monomer
+    // count monomer for pure vac from i3
+    else if (which[i] == nmonomer) ivalue = appcoros ->vac_monomer_count(); //count pure vac monomer
+
     /*
     else if (which[i] == mVACANCY) ivalue = monomer_local[VACANCY];
     else if (which[i] == mCU) ivalue = monomer_local[CU];
@@ -252,7 +303,6 @@ void Diagcoros::compute()
     //else if (which[i] == bulkcu) ivalue = appcoros->nbulkcu; //total bulk_diff event for id2 = 3
     else if (which[i] == nsalt) ivalue = appcoros->count_salt(); //total salt particle for id3 = 1
     else if (which[i] == nsaltdiff) ivalue = appcoros->num_saltdiffusion; //total bulk_diff event for id2 = 3
-    else if (which[i] == nmonomer) ivalue = appcoros->vac_monomer_count(); //count vac monomer
 
     else if (which[i] == recombine) dvalue = appcoros->nrecombine; //number of reocmbination
     else if (which[i] == energy) dvalue = appcoros->total_energy(); //system energy

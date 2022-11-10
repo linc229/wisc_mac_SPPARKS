@@ -40,6 +40,7 @@ App::App(SPPARKS *spk, int narg, char **arg) : Pointers(spk)
   xyz = NULL;
   iarray = NULL;
   darray = NULL;
+  // ct_site_array = NULL;
 
   sites_exist = 0;
 }
@@ -54,8 +55,10 @@ App::~App()
   memory->destroy(xyz);
   for (int i = 0; i < ninteger; i++) memory->destroy(iarray[i]);
   for (int i = 0; i < ndouble; i++) memory->destroy(darray[i]);
+  // for (int i = 0; i < ndouble; i++) memory->destroy(ct_site_array[i]); // ct_site_array by LC
   delete [] iarray;
   delete [] darray;
+  // delete [] ct_site_array; // ct_site_array by LC
 }
 
 /* ---------------------------------------------------------------------- */
@@ -66,6 +69,8 @@ void App::create_arrays()
   for (int i = 0; i < ninteger; i++) iarray[i] = NULL;
   if (ndouble) darray = new double*[ndouble];
   for (int i = 0; i < ndouble; i++) darray[i] = NULL;
+  // if (ndouble) ct_site_array = new double*[ndouble];  // ct_site_array by LC
+  // for (int i = 0; i < ndouble; i++) ct_site_array[i] = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -74,6 +79,7 @@ void App::recreate_arrays()
 {
   delete [] iarray;
   delete [] darray;
+  // delete [] ct_site_array;
   create_arrays();
 }
 
@@ -187,6 +193,11 @@ void *App::extract(const char *name)
     if (n < 1 || n > ndouble) return NULL;
     return (void *) darray[n-1];
   }
+  // if (strstr(name,"ct_site_array") == name) {  // ct_site_array by LC
+  //   int n = atoi(&name[6]);
+  //   if (n < 1 || n > ndouble) return NULL;
+  //   return (void *) ct_site_array[n-1];
+  // }
 
   return extract_app(name);
 }

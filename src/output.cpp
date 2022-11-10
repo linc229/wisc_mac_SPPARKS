@@ -138,6 +138,7 @@ double Output::compute(double time, int done)
   // dump output
 
   double dump_time = app->stoptime;
+
   for (int i = 0; i < ndump; i++) {
     if (time >= dumplist[i]->next_time) {
       dumplist[i]->write(time);

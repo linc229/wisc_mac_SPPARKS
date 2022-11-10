@@ -38,7 +38,7 @@ class Diagcoros : public Diag {
   char **list;
   int *which,*index,*ivector,*itype;
   double *dvector;
-  int siteflag,hopflag,msdflag;
+  int siteflag,hopflag,msdflag,csiteflag;
 };
 
 }

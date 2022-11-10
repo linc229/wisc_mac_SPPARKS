@@ -638,7 +638,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 
     nsweeps++;
     time += dt_kmc;
-
+//fprintf(screen,"time: %f; dt_kmc: %f \n", time, dt_kmc );
     if (time_flag)
       realtime += dt_kmc / nprocs * real_time(time);
 
@@ -647,6 +647,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (frenkelpair_flag) check_frenkelpair(time); //yongfeng
     if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
     if (concentrationflag) concentration_field(dt_kmc); //yongfeng
+//fprintf(screen,"check point\n");
     //if (ballistic_flag) sia_concentration(dt_kmc); // yongfeng
     if (saltdiffusion_flag) check_saltdiffusion(time);// LC
     if (KMC_stop_flag) {  //LC KMC_stop, if reach Cr_num_threshold
@@ -657,6 +658,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (time >= stoptime) alldone = 1;
     if (alldone || time >= nextoutput) {
        if(clst_flag) cluster(); //yongfeng
+       if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration
        nextoutput = output->compute(time,alldone);}
     timer->stamp(TIME_OUTPUT);
 
@@ -1263,7 +1265,10 @@ void AppLattice::grow(int n)
     memory->grow(iarray[i],nmax,"app:iarray");
   for (int i = 0; i < ndouble; i++)
     memory->grow(darray[i],nmax,"app:darray");
-
+    /// new darray for ct_site by LC
+  // for (int i = 0; i < ndouble; i++)
+  //   memory->grow(ct_site_array[i],nmax,"app:ct_site_array");
+    ///
   grow_app();
 }
 
@@ -1287,6 +1292,7 @@ void AppLattice::add_site(tagint n, double x, double y, double z)
 
   for (int i = 0; i < ninteger; i++) iarray[i][nlocal] = 0;
   for (int i = 0; i < ndouble; i++) darray[i][nlocal] = 0.0;
+  // for (int i = 0; i < ndouble; i++) ct_site_array[i][nlocal] = 0.0; // ct_site_array by LC
 
   nlocal++;
 }
@@ -1314,7 +1320,7 @@ void AppLattice::add_ghost(tagint n, double x, double y, double z,
 
   for (int i = 0; i < ninteger; i++) iarray[i][m] = 0;
   for (int i = 0; i < ndouble; i++) darray[i][m] = 0.0;
-
+  // for (int i = 0; i < ndouble; i++) ct_site_array[i][m] = 0.0; //ct_site_array by LC
   nghost++;
 }
 
@@ -1340,6 +1346,7 @@ void AppLattice::add_values(int i, char **values)
 {
   for (int m = 0; m < ninteger; m++) iarray[m][i] = atoi(values[m]);
   for (int m = 0; m < ndouble; m++) darray[m][i] = atof(values[m+ninteger]);
+  //for (int m = 0; m < ndouble; m++) ct_site_array[m][i] = atof(values[m+ninteger+ndouble]); // ct_site_array by LC
 }
 
 /* ----------------------------------------------------------------------
@@ -1428,6 +1435,8 @@ bigint AppLattice::memory_usage()
   bytes += nmax*3 * sizeof(double);         // xyz
   bytes += ninteger*nmax * sizeof(int);     // iarray
   bytes += ndouble*nmax * sizeof(double);   // darray
+
+  //bytes += ndouble*nmax * sizeof(double);   // ct_site_array by LC
 
   bytes += nmax * sizeof(int);              // numneigh
   bytes += nmax*maxneigh * sizeof(int);     // neighbor

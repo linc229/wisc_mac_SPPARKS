@@ -63,8 +63,8 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   // darray 1-4 for msd if activated, followed by concentrations
   if (diffusionflag == 1) {ninteger++; ndouble += 4;}
   // calculate concentration fiels for certain elements
-  if (concentrationflag) {ndouble += concentrationflag + 1;}
-  ndiffusion = diffusionflag*4;
+  if (concentrationflag) {ndouble += concentrationflag + 1;
+  ndiff = diffusionflag*4;}
 
   create_arrays();
 
@@ -139,6 +139,8 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   evap_extract_flag = 0;
   np_extract_flag = 0;
   coros_stop_flag = 0;
+  //ct_reset_flag = 0;
+  ct_site_flag = 0;
 
   // parameter for total_record by LC
   total_Ni = 0;
@@ -246,7 +248,12 @@ void Appcoros::input_app(char *command, int narg, char **arg)
 
     memory->create(nsites_local,nelement,"app/coros:nsites_local");
     memory->create(ebond1,nelement+1,nelement+1,"app/coros:ebond1");
-
+    memory->create(ct,nelement+1,"app/coros:ct"); //time averaged concentration based on the fractional occupation at each site
+    memory->create(ct_new,nelement+1,"app/coros:ct_new"); //time averaged concentration
+    memory->create(monomers,nelement,"app/coros:monomers");
+    //if(concentrationflag) memory->create(ct_site,nelement,nlocal,"app/coros:ct_site"); //site coefficient
+    memory->create(ct_site,nelement+1,nlocal,"app/coros:ct_site");
+    memory->create(ct_site_new,nelement+1,nlocal,"app/coros:ct_site_new");
     hcount = new int [nelement+1]; // total numner of switching with a vacancy;
 
     if(narg != nelement*(nelement+1)/2+1) error->all(FLERR,"Illegal ebond command");
@@ -568,6 +575,7 @@ void Appcoros::grow_app()
   type = iarray[0];   // lattice type; i1 in input
   element = iarray[1];  // element type; i2 in input
   potential = iarray[2]; // i3 contain potential of salt by LC d1 in input
+  //ct_site = ct_site_array;
   if(diffusionflag) {
     aid = iarray[3]; // initially set as global ID, must use set i3 unique in command line
     disp = darray; // msd; zero initially
@@ -644,14 +652,16 @@ void Appcoros::init_app()
        time_new[i] = 0;
     }
   }
+
   // initialize the time_list for ballistic mixing
   if(diffusionflag) {
-    for(i = 0; i < ndiffusion; i ++) {
+    for(i = 0; i < ndiff; i ++) {
       for(j = 0; j < nlocal; j++){
          disp[i][j] = 0.0;
       }
     }
   }
+
   // initialize the time_list for ballistic mixing
   if(concentrationflag) {
     for(i = ndiffusion; i < ndiffusion + concentrationflag; i ++) {
@@ -670,6 +680,24 @@ void Appcoros::init_app()
     dt_real = dt_akmc = 0.0;
   }
 */
+
+//initialize the concentration vectors
+if(concentrationflag) {
+ //concentration_field();
+ dt_new = 0.0;
+ for(i = 0; i < nelement; i ++) {
+    ct[i] = 0.0;
+    ct_new[i] = 0.0;
+
+    //initiallize initial concentration
+    for(j = 0; j < nlocal; j ++) {
+ ct_site[i][j] = 0.0;
+ ct_site_new[i][j] = 0.0;
+ //disp[i+ndiff][j] = 0.0;
+    }
+ }
+}
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1582,36 +1610,36 @@ double Appcoros::total_energy( )
   The contributions of corner and center atoms (of bcc cell) are equal
 ------------------------------------------------------------------------- */
 
-void Appcoros::concentration_field( )
-{
-  int i,j,jd;
-
-  double *ci = new double[nelement];
-  for(i = 0; i < nlocal; i++) {
-    for(j = 0; j < nelement; j++) ci[j] = 0.0;
-
-    ci[element[i]-1] += 0.25;
-    if(engstyle == 1) ci[element[i]-1] += 0.25;
-
-    for(j = 0; j < numneigh[i]; j ++) {
-      jd = neighbor[i][j];
-      ci[element[jd]-1] += 0.5*1.0/numneigh[i];
-    }
-
-    if(engstyle == 2) {
-      for(j = 0; j < numneigh2[i]; j ++) {
-        jd = neighbor2[i][j];
-        ci[element[jd]-1] += 0.25*1.0/numneigh2[i];
-      }
-    }
-
-    for(j = ndiffusion; j < ndiffusion + concentrationflag; j++) { // count for concentrationflag elements
-      disp[j][i] = ci[j-ndiffusion];
-    }
-  }
-
-  delete [] ci;
-}
+// void Appcoros::concentration_field( )
+// {
+//   int i,j,jd;
+//
+//   double *ci = new double[nelement];
+//   for(i = 0; i < nlocal; i++) {
+//     for(j = 0; j < nelement; j++) ci[j] = 0.0;
+//
+//     ci[element[i]-1] += 0.25;
+//     if(engstyle == 1) ci[element[i]-1] += 0.25;
+//
+//     for(j = 0; j < numneigh[i]; j ++) {
+//       jd = neighbor[i][j];
+//       ci[element[jd]-1] += 0.5*1.0/numneigh[i];
+//     }
+//
+//     if(engstyle == 2) {
+//       for(j = 0; j < numneigh2[i]; j ++) {
+//         jd = neighbor2[i][j];
+//         ci[element[jd]-1] += 0.25*1.0/numneigh2[i];
+//       }
+//     }
+//
+//     for(j = ndiffusion; j < ndiffusion + concentrationflag; j++) { // count for concentrationflag elements
+//       disp[j][i] = ci[j-ndiffusion];
+//     }
+//   }
+//
+//   delete [] ci;
+// }
 
 /* ----------------------------------------------------------------------
   check if the vacancy is trapped by solute by counting its
@@ -3011,7 +3039,9 @@ void Appcoros::check_saltdiffusion(double t)
   int nmix = 0;
   int nsalt = 0;
   for(int i = 0; i < nsaltdiffusion; i ++) {
-     salt_time_new[i] = static_cast<int>(t/salt_bfreq[i]);
+    if(t/salt_bfreq[i] < 1){  fprintf(screen,"warning: t/salt_bfreq<1 \n");}
+    if(t/salt_bfreq[i] < 1){break;}
+     salt_time_new[i] = static_cast<int>(t/salt_bfreq[i]); // salt_bfreq = 100 as default
      nmix = salt_time_new[i] - salt_time_old[i];
 
      nsalt = count_salt(); // count salt in lattice
@@ -3139,6 +3169,7 @@ int Appcoros::KMC_stop(){
 /* ----------------------------------------------------------------------
 vac monomer count for all lattice --> call by diag_coros.cpp
 potential[i] =0 and potential[jd] = 0 then sum_monomer++;
+this function count by i3 value not i2 and only works for pure vac
 ------------------------------------------------------------------------- */
 int Appcoros::vac_monomer_count(){
 
@@ -3161,26 +3192,104 @@ int Appcoros::vac_monomer_count(){
 return sum_monomer;
 }
 /* ----------------------------------------------------------------------
-
-update time averaged total concentration concentrations
-average vac concentration in all lattice in time intervals
+  The concentration_field func and time_averaged_concentration func is extract from
+  app_seg.cpp which is originated developed by Yongfeng
+  Integrate c*t at each site for fractional occupancy over time
 ------------------------------------------------------------------------- */
-void Appcoros::time_averaged_vac_concentration()
+void Appcoros::concentration_field(double dt)
 {
+  dt_new += dt; // update time interval
+  //fprintf(screen,"time_interval dt: %f \n", dt );
+  // keep it if we need to change the time_interval which is not dump_case
+//   if (ct_reset_flag == 1){// reset ct after diag call// average every
+//     for(int i = 1; i <= nelement; i++) {
+//        ct[i] = 0.0;
+//        ct_reset_flag = 0;
+//   }
+// }
+  for(int i = 0; i < nlocal; i++) {
+     ct_new[element[i]] += dt; // total concentration
+     ct_site_new[element[i]][i] += dt; // site concentration per kmc step
+  }
+  return;
+}
 
+/* ----------------------------------------------------------------------
+  update time averaged total concentration concentrations
+------------------------------------------------------------------------- */
+void Appcoros::time_averaged_concentration()
+{
+  if(dt_new <= 0){
+    return;
+  }
+  for(int i = 1; i <= nelement; i++) { // ct = c*t / dt
+     ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
+     ct_new[i] = 0.0; //start recounting
+    // comment disp part for segamentation fault
+     for(int j = 0; j < nlocal; j++) {
+	      //disp[ndiff+i][j] = ct_site[i][j]/dt_new; //time average
+        ct_site[i][j] = ct_site_new[i][j]/dt_new;
+	      ct_site_new[i][j] = 0.0; //start recounting
+     }
+  }
+  dt_new = 0.0;
+}
 
-  // example code from app_seg
-  // if(dt_new <= 0) return;
-  // for(int i = 0; i < nelement; i++) { // ct = c*t / dt
-  //    ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
-  //    ct_new[i] = 0.0; //start recounting
-  //
+/* ----------------------------------------------------------------------
+all monomer count for all lattice --> call by diag_coros.cpp
+this function count by i2 value not i3
+------------------------------------------------------------------------- */
+void Appcoros::monomer_count(){
+
+  int sum_monomer = 0;
+  int monomer_flag;
+  int jd;
+
+  // reset monomers array
+  for(int i = 1; i < nelement; i++) {
+    monomers[i] = 0;
+  }
+  for(int element_i = 1; element_i < nelement; element_i++) { // loop through all element
+    for(int lattice_i = 0; lattice_i < nlocal; lattice_i++) {  // loop all lattice
+      monomer_flag = 0;
+      if (element[lattice_i] == element_i) {
+        for (int k = 0; k < numneigh[lattice_i];k++){
+          jd = neighbor[lattice_i][k];
+            if (element[jd] == element_i){
+              monomer_flag = 0;
+              break;
+              }else{monomer_flag = 1;}
+          }
+          if (monomer_flag == 1){monomers[element_i]++;}
+      }
+    }
+}
+
+}
+
+/* ----------------------------------------------------------------------
+ct_reset
+------------------------------------------------------------------------- */
+// void Appcoros::ct_reset(){
+//   ct_reset_flag = 1;
+// }
+
+/* ----------------------------------------------------------------------
+ct_site_extract
+return ct_site **array called by app_lattice <-- dump_text
+use ctNi, ctVac, ctCu as input dump
+------------------------------------------------------------------------- */
+double **Appcoros::ct_site_extract(){
+  // ct_site_flag = 1;
+  // for(int i = 1; i <= nelement; i++) { // ct = c*t / dt
+  //    //ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
+  //    //ct_new[i] = 0.0; //start recounting
+  //   // comment disp part for segamentation fault
   //    for(int j = 0; j < nlocal; j++) {
-	// disp[ndiff+i][j] = ct_site[i][j]/dt_new; //time average
-	// ct_site[i][j] = 0.0; //start recounting
+	//       //disp[ndiff+i][j] = ct_site[i][j]/dt_new; //time average
+  //       ct_site[i][j] = ct_site_new[i][j]/dt_new;
+	//       ct_site_new[i][j] = 0.0; //start recounting
   //    }
   // }
-  // dt_new = 0.0;
-
-
+  return ct_site;
 }

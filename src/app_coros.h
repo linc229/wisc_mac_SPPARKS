@@ -41,7 +41,8 @@ class Appcoros : public AppLattice {
  private:
   int engstyle,nn1flag,nn2flag,barrierflag,diffusionflag; // 1NN or 2NN bonds
   int attemptfrequencyflag; // flag for attempt frequency by LC
-  int ndiffusion;
+  //int ndiffusion;
+  int ndiff;
   int *type,*element,*aid; // variables on each lattice site
   int firsttime;
 
@@ -136,6 +137,14 @@ class Appcoros : public AppLattice {
   int surface_Ni;
   int surface_Cr;
 
+  //parameter for time averaged concentration
+    double **ct_site, **ct_site_new, *ct,*ct_new,dt_new;
+    //int ct_reset_flag;
+    int ct_site_flag;
+
+  //parameter for monomer count
+  int *monomers;
+
   struct Event {           // one event for an owned site
     int style;             // reaction style = HOP,RECOMBINE
     int which;             // which reaction of this type
@@ -209,7 +218,11 @@ class Appcoros : public AppLattice {
   double total_metal_energy(); // by LC
   int KMC_stop(); //by LC
   int vac_monomer_count(); //by LC
-  void time_averaged_vac_concentration(); //by LC : calculate time-averaged vac concentration
+  void concentration_field(double); //calculation concentration field
+  void time_averaged_concentration(); // calculate time-averaged concentration
+  void monomer_count();
+  //void ct_reset(); // reset time-average concentration after diag call
+  double **ct_site_extract(); // return ct_site **array called by app_lattice <-- dump_text
 };
 
 }

@@ -25,6 +25,7 @@
 #include "memory.h"
 #include "error.h"
 
+
 using namespace SPPARKS_NS;
 
 // customize by adding keyword to 1st enum
@@ -434,6 +435,16 @@ int DumpText::parse_fields(int narg, char **arg)
       pack_choice[i] = &DumpText::pack_propensity;
       vtype[i] = DOUBLE;
 
+    }else if (strcmp(arg[iarg],"ctNi") == 0) { // ct_site by LC
+        pack_choice[i] = &DumpText::pack_ct_site_Ni;
+        vtype[i] = DOUBLE;
+    }else if (strcmp(arg[iarg],"ctVac") == 0) { // ct_site by LC
+        pack_choice[i] = &DumpText::pack_ct_site_Vac;
+        vtype[i] = DOUBLE;
+    }else if (strcmp(arg[iarg],"ctCr") == 0) { // ct_site by LC
+        pack_choice[i] = &DumpText::pack_ct_site_Cr;
+        vtype[i] = DOUBLE;
+
     // integer value = iN
     // double value = dN
 
@@ -667,6 +678,38 @@ void DumpText::pack_propensity(int n)
   }
 }
 
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_ct_site_Ni(int n)
+{
+  double **ct_site = applattice->ct_site_extract();
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = ct_site[1][clist[i]];
+    n += size_one;
+  }
+}
+
+// /* ---------------------------------------------------------------------- */
+
+void DumpText::pack_ct_site_Vac(int n)
+{
+  double **ct_site = applattice->ct_site_extract();
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = ct_site[2][clist[i]];
+    n += size_one;
+  }
+}
+
+// /* ---------------------------------------------------------------------- */
+
+void DumpText::pack_ct_site_Cr(int n)
+{
+  double **ct_site = applattice->ct_site_extract();
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = ct_site[3][clist[i]];
+    n += size_one;
+  }
+}
 /* ---------------------------------------------------------------------- */
 
 void DumpText::pack_iarray(int n)
