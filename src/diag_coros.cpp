@@ -30,7 +30,7 @@ enum{ZERO,FE,VACANCY,CU,NI,MN,Si,P,C,SIA};        // diagnosis terms
 //enum{FE,VACANCY,CU,NI,MN,Si,P,C,SIA};
 enum{hFE=11,hCU,hNI,hMN,hSi,hP,hC};               // hop steps for each element
 enum{sink=30};                                    // number of sink absorption
-enum{recombine=41, nmonomer};                               // number of recombination
+enum{recombine=41, nmonomer, nmetalpurevac};                               // number of recombination
 enum{monoFE=51, monoVACANCY, monoCU};             // number of mono-particle
 enum{react=61, surffe, surfcu, bulkfe, bulkcu, nsalt, nsaltdiff};     // number of each events
 enum{dFE=71,dVACANCY,dCU,dNI,dMN,dSi,dP,dC,dSIA}; // MSD for each element !! >dFE is floater
@@ -119,6 +119,7 @@ void Diagcoros::init()
     else if (strcmp(list[i], "monovac") == 0) which[i] = monoVACANCY;
     else if (strcmp(list[i], "monocu") == 0) which[i] = monoCU;
     else if (strcmp(list[i], "nmonomer") == 0) which[i] = nmonomer;
+    else if (strcmp(list[i], "nmetalpurevac") == 0) which[i] = nmetalpurevac; // LC
 
     else if (strcmp(list[i],"hfe") == 0) which[i] = hFE;//total hop events
     else if (strcmp(list[i],"hcu") == 0) which[i] = hCU;
@@ -271,7 +272,8 @@ void Diagcoros::compute()
     else if (which[i] == monoCU) ivalue = monosites[CU]; //count vac monomer
     // count monomer for pure vac from i3
     else if (which[i] == nmonomer) ivalue = appcoros ->vac_monomer_count(); //count pure vac monomer
-
+    // count number of pure vac from i3 - PD
+    else if (which[i] == nmetalpurevac) ivalue = appcoros ->metal_pure_vac_approxi(); //count pure vac monomer
     /*
     else if (which[i] == mVACANCY) ivalue = monomer_local[VACANCY];
     else if (which[i] == mCU) ivalue = monomer_local[CU];

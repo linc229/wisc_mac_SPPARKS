@@ -126,6 +126,7 @@ class Appcoros : public AppLattice {
   int np_extract_flag;
   int coros_stop_flag;
   int threshold_Cr;
+  int large_propensity_extract_flag;
 
   //parameter for surface_effect
   double surface_effect_b;
@@ -138,9 +139,10 @@ class Appcoros : public AppLattice {
   int surface_Cr;
 
   //parameter for time averaged concentration
-    double **ct_site, **ct_site_new, *ct,*ct_new,dt_new;
+    double **ct_site, **ct_site_new, *ct,*ct_new,dt_new, dt_site_c_new;
     //int ct_reset_flag;
-    int ct_site_flag;
+    //int ct_site_flag;
+    double **i3_site, **i3_site_new, dt_i3_site_new;
 
   //parameter for monomer count
   int *monomers;
@@ -223,6 +225,8 @@ class Appcoros : public AppLattice {
   void monomer_count();
   //void ct_reset(); // reset time-average concentration after diag call
   double **ct_site_extract(); // return ct_site **array called by app_lattice <-- dump_text
+  double **i3_site_extract(); // return i3_site **array called by app_lattice <-- dump_text
+  int metal_pure_vac_approxi(); //LC, return pure_vac in metal region by approximation
 };
 
 }

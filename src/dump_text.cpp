@@ -444,6 +444,12 @@ int DumpText::parse_fields(int narg, char **arg)
     }else if (strcmp(arg[iarg],"ctCr") == 0) { // ct_site by LC
         pack_choice[i] = &DumpText::pack_ct_site_Cr;
         vtype[i] = DOUBLE;
+    }else if (strcmp(arg[iarg],"i3_0") == 0) { // i3_site_0 by LC
+        pack_choice[i] = &DumpText::pack_i3_site_0;
+        vtype[i] = DOUBLE;
+    }else if (strcmp(arg[iarg],"i3_1") == 0) { // i3_site_1 by LC
+        pack_choice[i] = &DumpText::pack_i3_site_1;
+        vtype[i] = DOUBLE;
 
     // integer value = iN
     // double value = dN
@@ -682,7 +688,7 @@ void DumpText::pack_propensity(int n)
 
 void DumpText::pack_ct_site_Ni(int n)
 {
-  double **ct_site = applattice->ct_site_extract();
+  ct_site = applattice->ct_site_extract();
   for (int i = 0; i < nchoose; i++) {
     buf[n] = ct_site[1][clist[i]];
     n += size_one;
@@ -693,7 +699,6 @@ void DumpText::pack_ct_site_Ni(int n)
 
 void DumpText::pack_ct_site_Vac(int n)
 {
-  double **ct_site = applattice->ct_site_extract();
   for (int i = 0; i < nchoose; i++) {
     buf[n] = ct_site[2][clist[i]];
     n += size_one;
@@ -704,9 +709,25 @@ void DumpText::pack_ct_site_Vac(int n)
 
 void DumpText::pack_ct_site_Cr(int n)
 {
-  double **ct_site = applattice->ct_site_extract();
   for (int i = 0; i < nchoose; i++) {
     buf[n] = ct_site[3][clist[i]];
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_i3_site_0(int n)
+{
+  i3_site = applattice->i3_site_extract();
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = i3_site[0][clist[i]];
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_i3_site_1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = i3_site[1][clist[i]];
     n += size_one;
   }
 }

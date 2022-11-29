@@ -88,6 +88,7 @@ class AppLattice : public App {
   virtual void check_saltdiffusion(double) {} //LC
   virtual int KMC_stop() {} // LC
   virtual double **ct_site_extract() {} //LC
+  virtual double **i3_site_extract() {} //LC
 
  protected:
   int me,nprocs;

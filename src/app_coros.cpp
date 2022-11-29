@@ -140,7 +140,8 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   np_extract_flag = 0;
   coros_stop_flag = 0;
   //ct_reset_flag = 0;
-  ct_site_flag = 0;
+  //ct_site_flag = 0;
+  large_propensity_extract_flag = 0;
 
   // parameter for total_record by LC
   total_Ni = 0;
@@ -254,6 +255,8 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     //if(concentrationflag) memory->create(ct_site,nelement,nlocal,"app/coros:ct_site"); //site coefficient
     memory->create(ct_site,nelement+1,nlocal,"app/coros:ct_site");
     memory->create(ct_site_new,nelement+1,nlocal,"app/coros:ct_site_new");
+    memory->create(i3_site,5,nlocal,"app/coros:i3_site");
+    memory->create(i3_site_new,5,nlocal,"app/coros:i3_site_new");
     hcount = new int [nelement+1]; // total numner of switching with a vacancy;
 
     if(narg != nelement*(nelement+1)/2+1) error->all(FLERR,"Illegal ebond command");
@@ -411,7 +414,7 @@ void Appcoros::input_app(char *command, int narg, char **arg)
   else if (strcmp(command, "reaction") ==0) {
 
     if(narg != 6) error->all(FLERR,"illegal reaction command");
-    if(diffusionflag) error->warning(FLERR,"MSD calculated with reactions");
+    //if(diffusionflag) error->warning(FLERR,"MSD calculated with reactions"); //LC comment for current
     reaction_flag = 1;
     grow_reactions(); // grow reation list
 
@@ -470,6 +473,10 @@ void Appcoros::input_app(char *command, int narg, char **arg)
   else if (strcmp(command, "np_extract") ==0) {
     if(narg != 1) error->all(FLERR,"illegal np_extract command");
     np_extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
+  }
+  else if (strcmp(command, "large_propensity_extract") ==0) {
+    if(narg != 1) error->all(FLERR,"illegal large_propensity_extract command");
+    large_propensity_extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
   }
   // stop function based on number of corrosion event
   else if (strcmp(command, "coros_stop") ==0) {
@@ -575,7 +582,6 @@ void Appcoros::grow_app()
   type = iarray[0];   // lattice type; i1 in input
   element = iarray[1];  // element type; i2 in input
   potential = iarray[2]; // i3 contain potential of salt by LC d1 in input
-  //ct_site = ct_site_array;
   if(diffusionflag) {
     aid = iarray[3]; // initially set as global ID, must use set i3 unique in command line
     disp = darray; // msd; zero initially
@@ -685,17 +691,27 @@ void Appcoros::init_app()
 if(concentrationflag) {
  //concentration_field();
  dt_new = 0.0;
- for(i = 0; i < nelement; i ++) {
+ dt_site_c_new = 0.0;
+ for(i = 1; i <= nelement; i++) {
     ct[i] = 0.0;
     ct_new[i] = 0.0;
 
     //initiallize initial concentration
-    for(j = 0; j < nlocal; j ++) {
+    for(j = 0; j < nlocal; j++) {
  ct_site[i][j] = 0.0;
  ct_site_new[i][j] = 0.0;
  //disp[i+ndiff][j] = 0.0;
     }
  }
+ //initialize i3_site value
+dt_i3_site_new =0.0;
+ for(int i = 0; i < 5; i++) {
+   for(int j = 0; j < nlocal; j++){
+     i3_site[i][j] = 0.0;
+     i3_site_new[i][j] = 0.0;
+   }
+ }
+
 }
 
 }
@@ -879,6 +895,16 @@ double Appcoros::site_propensity(int i)
           //   barrier_print(r, hpropensity, rrate[j], surface_effect, ebarrier);
           // }
           //
+          //fprintf(screen,"reaction_propensity: %e\n",hpropensity);
+
+          // extract large propensity case info for propensity > 1
+          r =2; //rstyle ==2 for reaction
+          if (large_propensity_extract_flag ==1 && hpropensity >= 1.0){
+            //np_check(i,jid);
+            barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
+          }
+          // extract large propensity case info for propensity > 1
+
           add_event(i,jid,2,j,hpropensity);
           prob_reaction += hpropensity;
         }
@@ -930,11 +956,20 @@ double Appcoros::site_propensity(int i)
       }
 
       // extract non-positive barrier case info
-      if (np_extract_flag ==1 && r ==1 && ebarrier <= 0.0){
+      if (np_extract_flag ==1 && ebarrier <= 0&& r==1){
         //fprintf(screen,"sum_add: %d \n",sum_atom);
+
         np_check(i,jid);
         barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
       }
+      //fprintf(screen,"hop_propensity: %e\n",hpropensity); // LC check print
+
+      // extract large propensity case info for propensity > 1
+      if (large_propensity_extract_flag == 1 && hpropensity >= 1.0){
+        //np_check(i,jid);
+        barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
+      }
+      // extract large propensity case info for propensity > 1
 
       add_event(i,jid,1,-1,hpropensity);
       prob_hop += hpropensity;
@@ -947,6 +982,7 @@ double Appcoros::site_propensity(int i)
     np_check(i,jid);
     barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
   }
+
   return prob_hop + prob_reaction;
 }
 
@@ -2979,6 +3015,7 @@ if (type[jid] ==3){potential[jid]=1;}
 
 // need to update propensity after salt diffusion
 // because I change the property of lattice site
+
 update_propensity(iid);
 update_propensity(jid);
 num_saltdiffusion ++; //count number of salt diffusion motion
@@ -3025,6 +3062,7 @@ int sum = 0;
   // remove salt by set potential 1 -->> 0
   potential[jid] = 0;
   potential[i] = 0;
+
   update_propensity(i);
   update_propensity(jid);
 
@@ -3036,6 +3074,7 @@ int sum = 0;
 ------------------------------------------------------------------------- */
 void Appcoros::check_saltdiffusion(double t)
 {
+  //fprintf(screen,"time for salt diffusion: %f \n", t);
   int nmix = 0;
   int nsalt = 0;
   for(int i = 0; i < nsaltdiffusion; i ++) {
@@ -3045,6 +3084,7 @@ void Appcoros::check_saltdiffusion(double t)
      nmix = salt_time_new[i] - salt_time_old[i];
 
      nsalt = count_salt(); // count salt in lattice
+
      // temp check print
      //fprintf(screen,"nmix: %d; nsalt: %d;KMC time: %d; impurity diffuse time: %d; \n",nmix, nsalt, t, salt_bfreq[i]);
      //fprintf(screen,"nmix: %d; KMC time: %f; impurity diffuse time: %f; time_new: %d; time_old: %d \n",nmix, t, salt_bfreq[i]), salt_time_new[i],salt_time_old[i] ;
@@ -3086,7 +3126,8 @@ void Appcoros::barrier_print(int r, double propensity, double frequency,double r
   and print out its surrounding neighbor atoms
 ------------------------------------------------------------------------- */
 void Appcoros::np_check(int i, int jid){
-
+// i is vacancy site
+// jid is Ni or Cr site for be diffusion
 int i_Ni=0, i_vac=0, i_Cr=0, j_Ni=0, j_vac=0, j_Cr=0;
 int ki, kj;
 for (int n=0; n< numneigh[i]; n++){
@@ -3123,7 +3164,7 @@ for (int m=0; m< numneigh[jid]; m++){
   //barrier = migbarrier * surface_effect + (eng_after - eng_before)/2.0;
 
   total_eng = (eng1i + eng1j - eng0i -eng0j)/2;
-
+  fprintf(screen,"type of [i]: %d type of [jid]: %d \n",element[i], element[jid]);
   fprintf(screen,"i_Ni: %d i_vac: %d i_Cr: %d j_Ni: %d j_vac: %d j_Cr: %d \n", i_Ni, i_vac, i_Cr, j_Ni, j_vac, j_Cr);
   fprintf(screen,"intrinsic_barrier: %f total_eng_change: %f id_i: %d id_j: %d \n",intrinsic_barrier, total_eng, i, jid);
 }
@@ -3131,7 +3172,6 @@ for (int m=0; m< numneigh[jid]; m++){
 /* ----------------------------------------------------------------------
   calculating total metal energy which the particle is not VAC
 ------------------------------------------------------------------------- */
-
 double Appcoros::total_metal_energy( )
 {
   double penergy = 0.0;
@@ -3191,49 +3231,6 @@ int Appcoros::vac_monomer_count(){
   }
 return sum_monomer;
 }
-/* ----------------------------------------------------------------------
-  The concentration_field func and time_averaged_concentration func is extract from
-  app_seg.cpp which is originated developed by Yongfeng
-  Integrate c*t at each site for fractional occupancy over time
-------------------------------------------------------------------------- */
-void Appcoros::concentration_field(double dt)
-{
-  dt_new += dt; // update time interval
-  //fprintf(screen,"time_interval dt: %f \n", dt );
-  // keep it if we need to change the time_interval which is not dump_case
-//   if (ct_reset_flag == 1){// reset ct after diag call// average every
-//     for(int i = 1; i <= nelement; i++) {
-//        ct[i] = 0.0;
-//        ct_reset_flag = 0;
-//   }
-// }
-  for(int i = 0; i < nlocal; i++) {
-     ct_new[element[i]] += dt; // total concentration
-     ct_site_new[element[i]][i] += dt; // site concentration per kmc step
-  }
-  return;
-}
-
-/* ----------------------------------------------------------------------
-  update time averaged total concentration concentrations
-------------------------------------------------------------------------- */
-void Appcoros::time_averaged_concentration()
-{
-  if(dt_new <= 0){
-    return;
-  }
-  for(int i = 1; i <= nelement; i++) { // ct = c*t / dt
-     ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
-     ct_new[i] = 0.0; //start recounting
-    // comment disp part for segamentation fault
-     for(int j = 0; j < nlocal; j++) {
-	      //disp[ndiff+i][j] = ct_site[i][j]/dt_new; //time average
-        ct_site[i][j] = ct_site_new[i][j]/dt_new;
-	      ct_site_new[i][j] = 0.0; //start recounting
-     }
-  }
-  dt_new = 0.0;
-}
 
 /* ----------------------------------------------------------------------
 all monomer count for all lattice --> call by diag_coros.cpp
@@ -3268,28 +3265,147 @@ void Appcoros::monomer_count(){
 }
 
 /* ----------------------------------------------------------------------
-ct_reset
+  The concentration_field func and time_averaged_concentration func is extract from
+  app_seg.cpp which is originated developed by Yongfeng
+  Integrate c*t at each site for fractional occupancy over time
+  the count for time_average_concentration and site_concentration is in this function.
+  but separate into different func due to different d_time when average compute
 ------------------------------------------------------------------------- */
-// void Appcoros::ct_reset(){
-//   ct_reset_flag = 1;
-// }
+void Appcoros::concentration_field(double dt)
+{
+  dt_new += dt; // update time interval for time_average_concentration
+  dt_site_c_new += dt;
+  dt_i3_site_new += dt;
+
+  for(int i = 0; i < nlocal; i++) {
+     ct_new[element[i]] += dt; // total concentration
+     ct_site_new[element[i]][i] += dt; // site concentration per kmc step
+     i3_site_new[potential[i]][i] += dt;
+  }
+  return;
+}
+
+/* ----------------------------------------------------------------------
+  update time averaged total concentration concentrations only
+------------------------------------------------------------------------- */
+void Appcoros::time_averaged_concentration()
+{
+  if(dt_new <= 0){
+    return;
+  }
+  for(int i = 1; i <= nelement; i++) { // ct = c*t / dt
+     ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
+     ct_new[i] = 0.0; //start recounting
+   }
+     // !!site_concentration part was separated to ct_site_extract!!
+     // for(int j = 0; j < nlocal; j++) {
+	   //    //disp[ndiff+i][j] = ct_site[i][j]/dt_new; //time average
+     //    ct_site[i][j] = ct_site_new[i][j]/dt_new;
+	   //    ct_site_new[i][j] = 0.0; //start recounting
+     // }
+
+
+  dt_new = 0.0;
+}
 
 /* ----------------------------------------------------------------------
 ct_site_extract
+compute site_concentration and average
 return ct_site **array called by app_lattice <-- dump_text
 use ctNi, ctVac, ctCu as input dump
 ------------------------------------------------------------------------- */
 double **Appcoros::ct_site_extract(){
-  // ct_site_flag = 1;
-  // for(int i = 1; i <= nelement; i++) { // ct = c*t / dt
-  //    //ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
-  //    //ct_new[i] = 0.0; //start recounting
-  //   // comment disp part for segamentation fault
-  //    for(int j = 0; j < nlocal; j++) {
-	//       //disp[ndiff+i][j] = ct_site[i][j]/dt_new; //time average
-  //       ct_site[i][j] = ct_site_new[i][j]/dt_new;
-	//       ct_site_new[i][j] = 0.0; //start recounting
-  //    }
-  // }
+int check_flag;
+int jd;
+  if(dt_site_c_new <= 0){
+    return ct_site;
+  }
+  for(int i = 1; i <= nelement; i++) {
+     for(int j = 0; j < nlocal; j++) {
+        ct_site[i][j] = ct_site_new[i][j]/dt_site_c_new;
+	      ct_site_new[i][j] = 0.0; //recounting
+     }
+  }
+  dt_site_c_new = 0.0;
+
+//// special case analysis
+  // neighbor check and print if ct_site[vac][j] > 0 but its neighbor ct_site[vac][neighbor] is 0
+  // special case that if vac exist, it should diffuse to neighbor to create ct_site
+  // shoud comment for normal use
+  // for(int j = 0; j < nlocal; j++) {
+  //   check_flag =0;
+  //   if (ct_site[2][j]>0){
+  //   for (int k = 0; k < numneigh[j];k++){
+  //     jd = neighbor[j][k];
+  //     //i ==2 == vac
+  //     if (ct_site[2][jd] >0.0){
+  //     check_flag = check_flag + 1;}
+  //     else{check_flag = check_flag + 0;}
+  //     }
+  //   }
+  //   if (check_flag ==0&&ct_site[2][j]>0) {fprintf(screen,"check point\n");
+  //     } // if check point
+  //   }
+//// special case analysis
+
   return ct_site;
 }
+/* ----------------------------------------------------------------------
+site concentration of i3 ==0,1
+output in dump file per site
+------------------------------------------------------------------------- */
+double **Appcoros::i3_site_extract(){
+//output: number of pure_vac as integer in stats/diag
+//int pure_vac;
+
+if(dt_i3_site_new <= 0){
+  return i3_site;
+}
+// count site concentration of i3==0 and i3==1
+for(int i = 0; i < 2; i++) {
+  for(int j = 0; j < nlocal; j++){
+    i3_site[i][j] = i3_site_new[i][j]/dt_i3_site_new;
+    i3_site_new[i][j] = 0.0;
+  }
+}
+dt_i3_site_new = 0;
+return i3_site;
+}
+
+/* ----------------------------------------------------------------------
+metal_pure_vac approximation in lattice
+this function is count the pure vac in metal region in lattice without knowing the boundary
+Concept:
+condition 1:count number of i3 ==0 and its site_c of (i3==1) ==0
+condition 2: neighbor of i must not be impurity(i3=1)
+for each time interval,this particle must be i3==0 at first and site_c of impurity ==0,
+if site_concentration of (i3 ==1) >0, which means this position is pollute by impurity diffusion
+
+------------------------------------------------------------------------- */
+int Appcoros::metal_pure_vac_approxi()
+{
+  int metal_pure_vac =0;
+  int jd;
+  int sum_neigh;
+  //if potential[i] == 0 and ct_site[1][i] ==0;
+  for(int i =0; i<nlocal;i++){
+    if (potential[i] == 0 && i3_site[1][i] ==0.0){
+      sum_neigh=0;
+      for (int k = 0; k < numneigh[i];k++){
+        jd = neighbor[i][k];
+        if (potential[jd]==1){
+          sum_neigh++;
+        }
+      }
+      if (sum_neigh==0){
+        metal_pure_vac++;
+        //fprintf(screen,"metal_pure_vac_id:%d\n", i); // print out metal_pure_vac id for check
+      }
+    }
+  }
+
+  return metal_pure_vac;
+}
+/* ----------------------------------------------------------------------
+
+------------------------------------------------------------------------- */

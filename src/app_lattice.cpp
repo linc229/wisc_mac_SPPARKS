@@ -354,6 +354,7 @@ void AppLattice::setup()
     if (tstop > 0.0) {
       Ladapt = false;
       dt_kmc = tstop;
+
     }
 
     if (nstop > 0.0) {
@@ -361,19 +362,24 @@ void AppLattice::setup()
       double pmax = 0.0;
       for (int i = 0; i < nset; i++) {
 	int ntmp = set[i].solve->get_num_active();
+  //fprintf(screen,"ntmp: %d\n",ntmp); // LC check print
 	if (ntmp > 0) {
 	  double ptmp = set[i].solve->get_total_propensity();
 	  ptmp /= ntmp;
 	  pmax = MAX(ptmp,pmax);
+    //fprintf(screen,"ptmp: %d\n",ptmp); // LC check print
+    //fprintf(screen,"pmax: %f\n",pmax); // LC check print
 	}
       }
       double pmaxall;
       MPI_Allreduce(&pmax,&pmaxall,1,MPI_DOUBLE,MPI_MAX,world);
       if (pmaxall > 0.0) dt_kmc = nstop/pmaxall;
       else dt_kmc = stoptime-time;
+      //fprintf(screen,"nstop: %f, pmaxall: %f\n",nstop, pmaxall); // LC check print
     }
 
     dt_kmc = MIN(dt_kmc,stoptime-time);
+    //fprintf(screen,"dt_kmc: %f\n",dt_kmc); // LC check print
   }
 
   // convert rejection info to rKMC params
@@ -553,15 +559,15 @@ void AppLattice::iterate_kmc_sector(double stoptime)
   // save ptr to system solver
 
   Solve *hold_solve = solve;
-
+//fprintf(screen,"nprocs: %d\n", nprocs); //LC note:  nprocs == 1 for serial
   int alldone = 0;
   while (!alldone) {
     if (Ladapt) pmax = 0.0;
 
-    for (int iset = 0; iset < nset; iset++) {
+    for (int iset = 0; iset < nset; iset++) { //LC note:  nset == nsector == "4" from sector setting
       timer->stamp();
 
-      if (nprocs > 1) {
+      if (nprocs > 1) {  // LC note: not used nprocs ==1
 	comm->sector(iset);
 	timer->stamp(TIME_COMM);
       }
@@ -595,20 +601,24 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 
       if (Ladapt) {
 	int ntmp = solve->get_num_active();
+  //fprintf(screen,"ntmp: %d\n",ntmp); // LC check print number of active site
 	if (ntmp > 0) {
 	  double ptmp = solve->get_total_propensity();
 	  ptmp /= ntmp;
 	  pmax = MAX(ptmp,pmax);
+    //fprintf(screen,"ptmp: %d\n",ptmp); // LC check print total propensity/active site
+    //fprintf(screen,"pmax: %f\n",pmax); // LC check print max of ptmp
 	}
       }
-
+//fprintf(screen,"pmax: %f\n",pmax); // LC check print
       // execute events until sector time threshhold reached
 
       done = 0;
       timesector = 0.0;
-      while (!done) {
+      while (!done) { // LC note: iterate in 1 sector region
 	timer->stamp();
-	isite = solve->event(&dt);
+	isite = solve->event(&dt); //LC note: compute to get dt of 1 event on isite
+
 	timer->stamp(TIME_SOLVE);
 
         if(ballistic_flag && dt > min_bfreq) dt = min_bfreq;  // the timestep can not exceed ballstic frequency if the flag is on
@@ -620,25 +630,26 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 	  else {
             if(time_flag) time_tracer(dt); //yongfeng, pass dt to app_rpv
 	    site_event(site2i[isite],ranapp);
-	    naccept++;
+	    naccept++; // LC note: actuall number of event
+      //fprintf(screen,"iset, %d, dt: %f \n",iset,  dt); // LC check print
+      if (concentrationflag) concentration_field(dt); //yongfeng, LC --edited, this function should be located after site_event
 	  }
 	  timer->stamp(TIME_APP);
 	}
       }
 
-      if (nprocs > 1) {
+      if (nprocs > 1) {  // LC note: not used nprocs ==1
 	comm->reverse_sector(iset);
 	timer->stamp(TIME_COMM);
       }
-    }
+    } // LC note: end of nsector iteration
 
     if (allow_app_update) app_update(dt_kmc);
 
     // keep looping until overall time threshhold reached
 
-    nsweeps++;
+    nsweeps++; // LC note: number of sectoring
     time += dt_kmc;
-//fprintf(screen,"time: %f; dt_kmc: %f \n", time, dt_kmc );
     if (time_flag)
       realtime += dt_kmc / nprocs * real_time(time);
 
@@ -646,8 +657,8 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (ballistic_flag) check_ballistic(time); //yongfeng
     if (frenkelpair_flag) check_frenkelpair(time); //yongfeng
     if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
-    if (concentrationflag) concentration_field(dt_kmc); //yongfeng
-//fprintf(screen,"check point\n");
+    //if (concentrationflag) concentration_field(dt_kmc); //yongfeng, LC
+
     //if (ballistic_flag) sia_concentration(dt_kmc); // yongfeng
     if (saltdiffusion_flag) check_saltdiffusion(time);// LC
     if (KMC_stop_flag) {  //LC KMC_stop, if reach Cr_num_threshold
@@ -658,8 +669,8 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (time >= stoptime) alldone = 1;
     if (alldone || time >= nextoutput) {
        if(clst_flag) cluster(); //yongfeng
-       if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration
-       nextoutput = output->compute(time,alldone);}
+       if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration, LC
+       nextoutput = output->compute(time,alldone);} // LC note: here stats and dump --> compute function in output.cpp
     timer->stamp(TIME_OUTPUT);
 
     // recompute dt_kmc if adaptive, based on pmax across all sectors
@@ -670,6 +681,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
       else dt_kmc = stoptime-time;
       dt_kmc = MIN(dt_kmc,stoptime-time);
     }
+    //fprintf(screen,"dt_kmc: %f\n",dt_kmc); // LC check print
   }
 
   // restore system solver
@@ -1265,10 +1277,6 @@ void AppLattice::grow(int n)
     memory->grow(iarray[i],nmax,"app:iarray");
   for (int i = 0; i < ndouble; i++)
     memory->grow(darray[i],nmax,"app:darray");
-    /// new darray for ct_site by LC
-  // for (int i = 0; i < ndouble; i++)
-  //   memory->grow(ct_site_array[i],nmax,"app:ct_site_array");
-    ///
   grow_app();
 }
 
@@ -1292,7 +1300,6 @@ void AppLattice::add_site(tagint n, double x, double y, double z)
 
   for (int i = 0; i < ninteger; i++) iarray[i][nlocal] = 0;
   for (int i = 0; i < ndouble; i++) darray[i][nlocal] = 0.0;
-  // for (int i = 0; i < ndouble; i++) ct_site_array[i][nlocal] = 0.0; // ct_site_array by LC
 
   nlocal++;
 }
@@ -1320,7 +1327,6 @@ void AppLattice::add_ghost(tagint n, double x, double y, double z,
 
   for (int i = 0; i < ninteger; i++) iarray[i][m] = 0;
   for (int i = 0; i < ndouble; i++) darray[i][m] = 0.0;
-  // for (int i = 0; i < ndouble; i++) ct_site_array[i][m] = 0.0; //ct_site_array by LC
   nghost++;
 }
 
@@ -1346,7 +1352,6 @@ void AppLattice::add_values(int i, char **values)
 {
   for (int m = 0; m < ninteger; m++) iarray[m][i] = atoi(values[m]);
   for (int m = 0; m < ndouble; m++) darray[m][i] = atof(values[m+ninteger]);
-  //for (int m = 0; m < ndouble; m++) ct_site_array[m][i] = atof(values[m+ninteger+ndouble]); // ct_site_array by LC
 }
 
 /* ----------------------------------------------------------------------
@@ -1436,7 +1441,6 @@ bigint AppLattice::memory_usage()
   bytes += ninteger*nmax * sizeof(int);     // iarray
   bytes += ndouble*nmax * sizeof(double);   // darray
 
-  //bytes += ndouble*nmax * sizeof(double);   // ct_site_array by LC
 
   bytes += nmax * sizeof(int);              // numneigh
   bytes += nmax*maxneigh * sizeof(int);     // neighbor
