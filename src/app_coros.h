@@ -143,6 +143,13 @@ class Appcoros : public AppLattice {
     //int ct_reset_flag;
     //int ct_site_flag;
     double **i3_site, **i3_site_new, dt_i3_site_new;
+  // parameter for dump_event func by LC
+  int dump_event_flag;
+  int dump_index;
+  int dump_event_all_flag;
+  int dump_event_all_file;
+  int dump_event_all_index;
+
 
   //parameter for monomer count
   int *monomers;
@@ -227,6 +234,8 @@ class Appcoros : public AppLattice {
   double **ct_site_extract(); // return ct_site **array called by app_lattice <-- dump_text
   double **i3_site_extract(); // return i3_site **array called by app_lattice <-- dump_text
   int metal_pure_vac_approxi(); //LC, return pure_vac in metal region by approximation
+  void dump_event(); // LC, dump event list per dump time as text file
+  void dump_event_all(int, int, int, int, double); // LC dump all event list to one file
 };
 
 }

@@ -712,6 +712,7 @@ void AppDiffusion::site_event_linear(int i, class RandomPark *random)
     if (ievent < 0) error->one(FLERR,"Did not reach event propensity threshhold");
   }
 
+
   // deposition or hop event
   // for deposition event, find site to deposit on
   // after deposition, reset i and j to that site
@@ -1042,6 +1043,8 @@ void AppDiffusion::add_event(int i, int destination,
   firstevent[i] = freeevent;
   freeevent = next;
   nevents++;
+
+
 }
 
 /* ----------------------------------------------------------------------

@@ -29,12 +29,13 @@ enum{inter,floater};                              		// data type
 enum{VAC=0,INT,CE1,CE2,CE3,CE4,CE5,CE6,CE7,CE8};   		// CE: chemical element
 enum{hVAC=10,hINT,hCE1,hCE2,hCE3,hCE4,hCE5,hCE6,hCE7,hCE8}; 	// hop steps for each element
 enum{sink=20};                                    		// number of sink absorption
-enum{recombine=30,FPair,selfion,vabsorb,iabsorb};      		// number of recombination, all integers till here
-enum{sia=40};                                     		// onsager coefficient
+enum{recombine=30,FPair,selfion,vabsorb,iabsorb};      		// number of recombination
+enum{mono=40,di_mono1,di_mono2,di_mono3,di_mono4,di_mono5,di_mono6,di_mono7,di_mono8}; // Peng: number of dissolved particles
+enum{sia=50};                                     		// onsager coefficient, floats start, integers should be set before this line
 enum{cVAC=60,cINT,cCE1,cCE2,cCE3,cCE4,cCE5,cCE6,cCE7,cCE8}; 	// time averaged concentration
 enum{dVAC=70,dINT,dCE1,dCE2,dCE3,dCE4,dCE5,dCE6,dCE7,dCE8}; 	// MSD
 enum{energy=80,treal,fvt};                        		// energy and realistic time
-enum{ris=90};                                     		// number of ris
+enum{ris=90,};                                     		// number of ris
 enum{lij=100};                                     		// onsager coefficient
 enum{sro=200};                                     		// short range order
 /* ---------------------------------------------------------------------- */
@@ -42,7 +43,7 @@ enum{sro=200};                                     		// short range order
 DiagSeg::DiagSeg(SPPARKS *spk, int narg, char **arg) : Diag(spk,narg,arg)
 {
   if (strcmp(app->style,"seg") != 0)
-    error->all(FLERR,"Diag_style ris requires app_style seg");
+    error->all(FLERR,"Diag_style seg requires app_style seg");
 
   nlist = 0;
 
@@ -119,7 +120,7 @@ void DiagSeg::init()
     else if (strcmp(list[i],"cce7") == 0) which[i] = cCE7;
     else if (strcmp(list[i],"cce8") == 0) which[i] = cCE8;
 
-   /*! hopping calculations disabled currently
+   // hopping calculations (Peng)
     else if (strcmp(list[i],"hvac") == 0) which[i] = hVAC; //total hopping event n
     else if (strcmp(list[i],"hint") == 0) which[i] = hINT;
     else if (strcmp(list[i],"hce1") == 0) which[i] = hCE1;
@@ -130,7 +131,7 @@ void DiagSeg::init()
     else if (strcmp(list[i],"hce6") == 0) which[i] = hCE6;
     else if (strcmp(list[i],"hce7") == 0) which[i] = hCE7;
     else if (strcmp(list[i],"hce8") == 0) which[i] = hCE8;
-   */
+
 
     else if (strcmp(list[i],"dvac") == 0) which[i] = dVAC; //MSD
     else if (strcmp(list[i],"dint") == 0) which[i] = dINT;
@@ -158,6 +159,16 @@ void DiagSeg::init()
     else if (strcmp(list[i],"treal") == 0) which[i] = treal;
     else if (strcmp(list[i],"fvt") == 0) which[i] = fvt;
    */
+
+   //Peng: dissolved B particles, monomers and dimers
+    else if (strcmp(list[i],"di_mono1") == 0) which[i] = di_mono1;
+    else if (strcmp(list[i],"di_mono2") == 0) which[i] = di_mono2;
+    else if (strcmp(list[i],"di_mono3") == 0) which[i] = di_mono3;
+    else if (strcmp(list[i],"di_mono4") == 0) which[i] = di_mono4;
+    else if (strcmp(list[i],"di_mono5") == 0) which[i] = di_mono5;
+    else if (strcmp(list[i],"di_mono6") == 0) which[i] = di_mono6;
+    else if (strcmp(list[i],"di_mono7") == 0) which[i] = di_mono7;
+    else if (strcmp(list[i],"di_mono8") == 0) which[i] = di_mono8;
 
     else if (strcmp(list[i],"recombine") == 0) which[i] = recombine;
     else if (strcmp(list[i],"nfp") == 0) which[i] = FPair;
@@ -199,7 +210,7 @@ void DiagSeg::init()
       which[i] = sro + id1*10 + id2;
     }
 
-    else error->all(FLERR,"Invalid value setting in diag_style ris");
+    else error->all(FLERR,"Invalid value setting in diag_style seg");
   }
 
   for (int i = 0; i < nlist; i++) {
@@ -229,6 +240,7 @@ void DiagSeg::compute()
   int sites[10],nhop[10],ivalue; // int data
   int nlocal = appseg->nlocal;
   int nelement = appseg->nelement;
+  int m; //count_dumbbell
   double dvalue; // double data
   double *csites;
   double msd[10];
@@ -241,7 +253,7 @@ void DiagSeg::compute()
   // time averaged concengtration
   if(csiteflag) {csites = appseg->ct;}
   // number of each chemical type of sias
-  //if(siaflag) {appseg->count_dumbbell();}
+  if(siaflag) {appseg->count_dumbbell(m);}
 
 
   // site information
@@ -251,11 +263,11 @@ void DiagSeg::compute()
     for(i = 0; i < nlocal; i++) sites[element[i]]++;
   }
 
-  /*
-  if(hopflag) {// hop event of each element
+
+  if(hopflag) {// hop event of each element (Peng)
     for(int i = 1; i < nelement+1; i++) {nhop[i] = 0; nhop[i] = appseg->hcount[i];}
   }
-  */
+
 
   if(msdflag) {// MSD calculation
     int *element = appseg->element;
@@ -305,6 +317,37 @@ void DiagSeg::compute()
     else if (which[i] == FPair) ivalue = appseg->nFPair; //number of reocmbination
     else if (which[i] == selfion) ivalue = appseg->nself_ion; //number of selfionn
     else if (which[i] == recombine) ivalue = appseg->nrecombine[VAC]; //number of reocmbination
+
+//Peng: number of solute particles (ce1 as solvent)
+    else if (which[i] == di_mono1) {// ce2
+      int n = 3;
+      ivalue = appseg->solubility(n);
+    }
+    else if (which[i] == di_mono2) {// ce3
+      int n = 4;
+      ivalue = appseg->solubility(n);
+    }
+    else if (which[i] == di_mono3) {// ce4
+      int n = 5;
+      ivalue = appseg->solubility(n);
+    }
+    else if (which[i] == di_mono4) {// ce5
+      int n = 6;
+      ivalue = appseg->solubility(n);
+    }
+    else if (which[i] == di_mono5) {// ce6
+      int n = 7;
+      ivalue = appseg->solubility(n);
+    }
+    else if (which[i] == di_mono6) {// ce7
+      int n = 8;
+      ivalue = appseg->solubility(n);
+    }
+    else if (which[i] == di_mono7) {// ce8
+      int n = 9;
+      ivalue = appseg->solubility(n);
+    }
+
 
     else if (which[i] == vabsorb) { // absorbed vacan
       int nabsorb = 0;

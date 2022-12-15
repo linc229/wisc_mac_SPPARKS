@@ -96,6 +96,9 @@ class AppRpv : public AppLattice {
   int ntrap;
   int *trap_type;
 
+//parameter for LC check
+  int dump_index;
+
   struct Event {           // one event for an owned site
     int style;             // reaction style = HOP,RECOMBINE
     int which;             // which reaction of this type

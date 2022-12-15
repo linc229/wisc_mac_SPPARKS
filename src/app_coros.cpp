@@ -27,7 +27,9 @@
 #include "error.h"
 
 #include "finish.h" // added for KMC_stop by LC
-
+#include <iostream>
+#include <fstream>
+using namespace std;
 #include "app_lattice.h"
 
 using namespace SPPARKS_NS;
@@ -47,7 +49,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   ninteger = 3; // first for lattice type,second for element
   ndouble = 0; // default
   //ndouble = 1; // add 1 to contain potential by LC
-  delpropensity = 2;
+  delpropensity = 2; // LC note: control layer for nborder
   delevent = 1;
   allow_kmc = 1;
   allow_rejection = 0;
@@ -142,6 +144,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   //ct_reset_flag = 0;
   //ct_site_flag = 0;
   large_propensity_extract_flag = 0;
+  //dump_event_flag = 0;
 
   // parameter for total_record by LC
   total_Ni = 0;
@@ -149,6 +152,12 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   total_Cr = 0;
   surface_Ni = 0;
   surface_Cr = 0;
+
+  // parameter for dump_event by LC
+  dump_index=0;
+  dump_event_all_index = 0;
+  dump_event_all_file = 0;
+  dump_event_all_flag = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -253,10 +262,10 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     memory->create(ct_new,nelement+1,"app/coros:ct_new"); //time averaged concentration
     memory->create(monomers,nelement,"app/coros:monomers");
     //if(concentrationflag) memory->create(ct_site,nelement,nlocal,"app/coros:ct_site"); //site coefficient
-    memory->create(ct_site,nelement+1,nlocal,"app/coros:ct_site");
-    memory->create(ct_site_new,nelement+1,nlocal,"app/coros:ct_site_new");
-    memory->create(i3_site,5,nlocal,"app/coros:i3_site");
-    memory->create(i3_site_new,5,nlocal,"app/coros:i3_site_new");
+    memory->create(ct_site,nelement+1,nlocal,"app/coros:ct_site"); //LC
+    memory->create(ct_site_new,nelement+1,nlocal,"app/coros:ct_site_new");  //LC
+    memory->create(i3_site,5,nlocal,"app/coros:i3_site"); // LC
+    memory->create(i3_site_new,5,nlocal,"app/coros:i3_site_new"); // LC
     hcount = new int [nelement+1]; // total numner of switching with a vacancy;
 
     if(narg != nelement*(nelement+1)/2+1) error->all(FLERR,"Illegal ebond command");
@@ -472,11 +481,19 @@ void Appcoros::input_app(char *command, int narg, char **arg)
   }
   else if (strcmp(command, "np_extract") ==0) {
     if(narg != 1) error->all(FLERR,"illegal np_extract command");
-    np_extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
+    np_extract_flag = atoi(arg[0]); // np_extract flag is on/enable if = 1, disable for other value
   }
   else if (strcmp(command, "large_propensity_extract") ==0) {
     if(narg != 1) error->all(FLERR,"illegal large_propensity_extract command");
-    large_propensity_extract_flag = atoi(arg[0]); // extract flag is on/enable if = 1, disable for other value
+    large_propensity_extract_flag = atoi(arg[0]); // large_propensity_extract is on/enable if = 1, disable for other value
+  }
+  else if (strcmp(command, "dump_event") ==0) {
+    if(narg != 1) error->all(FLERR,"illegal dump_event command");
+    dump_event_flag = atoi(arg[0]); // dump_event_flag is on/enable if = 1, disable for other value
+  }
+  else if (strcmp(command, "dump_event_all") ==0) {
+    if(narg != 1) error->all(FLERR,"illegal dump_event_all command");
+    dump_event_all_flag = atoi(arg[0]); // dump_event_flag is on/enable if = 1, disable for other value
   }
   // stop function based on number of corrosion event
   else if (strcmp(command, "coros_stop") ==0) {
@@ -487,13 +504,7 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     coros_stop_flag = 1;
 
   }
-    // check salt souce that the potential should be contant 10 value;
-/*      for (i = 0; i < nlocal; i++){
-        if (type[i] == saltsite){
-          potential[i] = saltpotential;
-        }
-      }
-*/
+
 // take surface diffusion as exponential function
 else if (strcmp(command, "surfaceeffect") ==0) {
 
@@ -714,6 +725,9 @@ dt_i3_site_new =0.0;
 
 }
 
+
+
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -820,7 +834,7 @@ double Appcoros::site_SP_energy(int i, int j, int estyle, double s)
   element[j] = jele;
   element[i] = iele;
   //barrier = migbarrier * surface_effect + (eng_after - eng_before)/2.0;
-  eng = mbarrier[element[j]] * s + (eng1i + eng1j - eng0i -eng0j)/2;
+  eng = mbarrier[element[j]] * s + (eng1i + eng1j - eng0i -eng0j)/2; //LC add surface effect
 
   //add elastic contribution if applicable
   /* comment because assume no elastic interaction
@@ -876,7 +890,8 @@ double Appcoros::site_propensity(int i)
             sum_kd ++;
           }
         }
-        if (sum_kd == 0) return prob_reaction;
+        //if (sum_kd == 0) return prob_reaction;
+        if (sum_kd == 0) break; // no reaction // edited may need to double check later
         // count number of neighbor salt
 
         if(!(sink_flag && isink[i][jid -1] == 1)) {//production at sinks allowed
@@ -957,28 +972,27 @@ double Appcoros::site_propensity(int i)
 
       // extract non-positive barrier case info
       if (np_extract_flag ==1 && ebarrier <= 0&& r==1){
-        //fprintf(screen,"sum_add: %d \n",sum_atom);
-
         np_check(i,jid);
         barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
       }
-      //fprintf(screen,"hop_propensity: %e\n",hpropensity); // LC check print
 
       // extract large propensity case info for propensity > 1
       if (large_propensity_extract_flag == 1 && hpropensity >= 1.0){
-        //np_check(i,jid);
         barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
       }
       // extract large propensity case info for propensity > 1
 
       add_event(i,jid,1,-1,hpropensity);
       prob_hop += hpropensity;
+
+       // if (jid==9){
+       //   fprintf(screen, "check point:i:%d, element[jid]:%d\n", i, element[jid]);
+       // }
       //num_iter++;
     }
   }
   // extract evaporation case info
   if (evap_extract_flag ==1 && sum_atom == 1){
-    //fprintf(screen,"sum_add: %d \n",sum_atom);
     np_check(i,jid);
     barrier_print(r, hpropensity, attemptfrequency[element[jid]], surface_effect, ebarrier);
   }
@@ -1005,7 +1019,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
   if(time_flag) itrap = vacancy_trap(i);
   // find the event to perform
   int ievent = firstevent[i];
-  while (1) {
+  while (1) {// LC note: select event based on event group of site i
     proball += events[ievent].propensity;
     if (proball >= threshhold) break;
     ievent = events[ievent].next;
@@ -1017,13 +1031,18 @@ void Appcoros::site_event(int i, class RandomPark *random)
   j = events[ievent].jpartner;
 
 
+  if (element[j] == element[i]){
+    fprintf(screen,"ievent: %d,i:%d, element[i]:%d, jid:%d, element[j]:%d propensity:%e \n",ievent,i, element[i], j, element[j], events[ievent].propensity);
+  }
+
   int kp, lp;   //LC swap salt potential also, if swap with vac with salt
   // switch element between site i and jpartner for hop diffusion
   if(rstyle == 1 || rstyle == 3 || rstyle ==4) {
-    k = element[i];
-    kp = potential[i]; // LC swap salt potential
+    //k = element[i];
+    //kp = potential[i]; // LC swap salt potential
     if (rstyle == 4) { // switch with a 1NN of which
-
+       k = element[i];
+       kp = potential[i]; // LC swap salt potential
        l = element[which];
        lp = potential[which]; //LC swap salt potential
        element[i] = l;
@@ -1032,16 +1051,22 @@ void Appcoros::site_event(int i, class RandomPark *random)
        potential[which] = potential[j]; //LC swap salt potential
        element[j] = k;
        potential[j] = kp; // LC swap salt potential
-
+       //fprintf(screen,"check point\n");
     } else { // switch with a 1NN of i
+      k = element[i];
+      kp = potential[i]; // LC swap salt potential
       element[i] = element[j];
-      potential[i] = potential[j] ; //LC swap salt potential
       element[j] = k;
+      potential[i] = potential[j] ; //LC swap salt potential
       potential[j] = kp; //LC swap salt potential
     }
 
+
     update_propensity(i);
+
     update_propensity(j);
+
+
     hcount[element[i]] ++;
 
     // this part is count number of diffusion for each elements by LC
@@ -1090,7 +1115,7 @@ void Appcoros::site_event(int i, class RandomPark *random)
       disp[3][j] = disp[0][j]*disp[0][j] + disp[1][j]*disp[1][j] + disp[2][j]*disp[2][j];
     }
 
-  } else {
+  } else {// LC note: rstyle ==2 in this else session, and for reaction only
 
  // reaction events with non-zero barriers
     k = element[i];
@@ -1099,10 +1124,11 @@ void Appcoros::site_event(int i, class RandomPark *random)
     nsites_local[k-1] --;
     nsites_local[j-1] ++;
 
-
     salt_remove(i);
-
-
+    //update after reaction, it will update in salt_remove function
+    //just leave here for check
+    update_propensity(i);
+//update_propensity(j);
     // update reaction target number
     for(ii = 0; ii < nreaction; ii++) {
       if(routput[ii] != j) continue;
@@ -1219,11 +1245,15 @@ void Appcoros::update_propensity(int i)
   int nsites = 0;
   int isite = i2site[i];
 
-  if (isite < 0) return;
-
-  propensity[isite] = site_propensity(i);
-  esites[nsites++] = isite;
-  echeck[isite] = 1;
+  //if (isite < 0) return;
+  // LC edite
+  // this update should update i, j and 1NN of i and j,
+  // the previous code will not update 1NN of i if i is out of sector
+  if(isite>=0){
+    propensity[isite] = site_propensity(i);
+    esites[nsites++] = isite;
+    echeck[isite] = 1;
+   }
 
   for (n = 0; n < numneigh[i]; n++) { // update propensity for 1NN of site i
     m = neighbor[i][n];
@@ -1310,6 +1340,7 @@ void Appcoros::check_reaction()
   // reset site propensity if any enabling or disabling occurs
   if(flag_local > 0) reset_propensity();
 
+
 }
 
 /* ----------------------------------------------------------------------
@@ -1335,6 +1366,7 @@ void Appcoros::clear_events(int i)
 {
   int next;
   int index = firstevent[i];
+
   while (index >= 0) {
     next = events[index].next;
     events[index].next = freeevent;
@@ -1453,6 +1485,11 @@ void Appcoros::add_event(int i, int j, int rstyle, int which, double propensity)
   firstevent[i] = freeevent;
   freeevent = next;
   nevents++;
+
+  // dump all eventlist to one file; !!need double check
+  if(dump_event_all_flag ==1){
+  dump_event_all(rstyle, which, j, next, propensity);}
+
 }
 
 /* ----------------------------------------------------------------------
@@ -1625,7 +1662,7 @@ double Appcoros::total_energy( )
 
   // print every site energy
   //fprintf(screen,"id: %d particle type: %d site_energy: %f penergy: %f \n",i, element[i],sites_energy(i,engstyle),penergy/2);
-
+  //fprintf(screen,"id: %d particle type: %d\n",i+1, element[i]);
   }
 /*
   if(elastic_flag) {
@@ -1635,6 +1672,7 @@ double Appcoros::total_energy( )
     }
   }
 */
+
   return penergy/2.0;
 }
 
@@ -2838,6 +2876,7 @@ void Appcoros::update_region(int i,int j, int r)
   update region_loop
   !!currently check every neighbor if it is salt region(type3)
   !!may check the effeciency in the future
+  comment but keep it
 ------------------------------------------------------------------------- */
 /*
 int Appcoros::update_neighbor_check(int l)
@@ -3004,7 +3043,7 @@ if (array_size == 0){return;} //exception if array length = 0
    }
  }
 
-// step 3 swap the potential of i and j
+// step 3 swap the potential of iid and jid
 k = potential[iid];
 potential[iid] = potential[jid];
 potential[jid] = k;
@@ -3015,7 +3054,8 @@ if (type[jid] ==3){potential[jid]=1;}
 
 // need to update propensity after salt diffusion
 // because I change the property of lattice site
-
+//!! we can move the update_propensity after all potential_diff finished
+//!! update whole lattice, be better is nmix is larger than "3000"
 update_propensity(iid);
 update_propensity(jid);
 num_saltdiffusion ++; //count number of salt diffusion motion
@@ -3048,7 +3088,7 @@ int sum = 0;
   int array_size = sizeof(neighbor_list)/sizeof(neighbor_list[0]);
   if (array_size == 0){return;} //exception
   iwhich = -1;
-  check_label= 0;
+  check_label = 0;
   while (iwhich < 0 || iwhich >  array_size || check_label == 0){
     iwhich = rand() %  array_size;
     if (neighbor_list[iwhich] != -1 ){
@@ -3057,6 +3097,9 @@ int sum = 0;
       jid = neighbor_list[iwhich];
     }
   }
+  // check point
+  //fprintf(screen,"[iwhich]: %d, neighbor_list[iwhich]: %d \n", iwhich, neighbor_list[iwhich]);
+
   // assign array id to lattice id
   //jid = neighbor_list[rand_index];
   // remove salt by set potential 1 -->> 0
@@ -3074,7 +3117,7 @@ int sum = 0;
 ------------------------------------------------------------------------- */
 void Appcoros::check_saltdiffusion(double t)
 {
-  //fprintf(screen,"time for salt diffusion: %f \n", t);
+
   int nmix = 0;
   int nsalt = 0;
   for(int i = 0; i < nsaltdiffusion; i ++) {
@@ -3084,10 +3127,6 @@ void Appcoros::check_saltdiffusion(double t)
      nmix = salt_time_new[i] - salt_time_old[i];
 
      nsalt = count_salt(); // count salt in lattice
-
-     // temp check print
-     //fprintf(screen,"nmix: %d; nsalt: %d;KMC time: %d; impurity diffuse time: %d; \n",nmix, nsalt, t, salt_bfreq[i]);
-     //fprintf(screen,"nmix: %d; KMC time: %f; impurity diffuse time: %f; time_new: %d; time_old: %d \n",nmix, t, salt_bfreq[i]), salt_time_new[i],salt_time_old[i] ;
 
      while (nmix) {  //perform mixing nmix times
        nmix --;
@@ -3128,6 +3167,7 @@ void Appcoros::barrier_print(int r, double propensity, double frequency,double r
 void Appcoros::np_check(int i, int jid){
 // i is vacancy site
 // jid is Ni or Cr site for be diffusion
+
 int i_Ni=0, i_vac=0, i_Cr=0, j_Ni=0, j_vac=0, j_Cr=0;
 int ki, kj;
 for (int n=0; n< numneigh[i]; n++){
@@ -3171,6 +3211,7 @@ for (int m=0; m< numneigh[jid]; m++){
 
 /* ----------------------------------------------------------------------
   calculating total metal energy which the particle is not VAC
+  // not realistic for current model
 ------------------------------------------------------------------------- */
 double Appcoros::total_metal_energy( )
 {
@@ -3198,7 +3239,7 @@ double Appcoros::total_metal_energy( )
 int Appcoros::KMC_stop(){
   if (coros_stop_flag == 0) return 0;
   double Cr_num_threshold = threshold_Cr * 0.01 * total_Cr;
-  //fprintf(screen,"Cr_num_threshold: %f\n",Cr_num_threshold );
+
   double j = (float) nreact;
   if (j >= Cr_num_threshold){
     //fprintf(screen,"stop by reaching nreact\n");
@@ -3304,7 +3345,6 @@ void Appcoros::time_averaged_concentration()
 	   //    ct_site_new[i][j] = 0.0; //start recounting
      // }
 
-
   dt_new = 0.0;
 }
 
@@ -3369,6 +3409,12 @@ for(int i = 0; i < 2; i++) {
   }
 }
 dt_i3_site_new = 0;
+
+// call dump_event if the flag is on
+  if(dump_event_flag == 1) dump_event();
+  //
+
+
 return i3_site;
 }
 
@@ -3407,5 +3453,60 @@ int Appcoros::metal_pure_vac_approxi()
   return metal_pure_vac;
 }
 /* ----------------------------------------------------------------------
-
+dump all event_list per dump time, output as txt file by LC
+this function is called from app.lattice, can be improve in the future
+!! need double check, current function may not dump the correct event
 ------------------------------------------------------------------------- */
+void Appcoros::dump_event()
+{
+  char temp[10];
+  string dumpfilename = ".dump_eventlist";
+  sprintf(temp, "%d", dump_index);
+  dumpfilename = temp + dumpfilename;
+  //create/open file
+  ofstream file(dumpfilename);
+  string header = "index style which jpartner element[j] next propensity\n";
+  file << "number of event: " << nevents << "\n";
+  file << header;
+  //print every event list
+  for (int i = 0; i < nevents; i++){
+    file << i << " "
+         << events[i].style << " "
+         << events[i].which << " "
+         << events[i].jpartner << " "
+         << element[events[i].jpartner] << " "
+         << events[i].next << " "
+         << events[i].propensity << " \n";
+
+  }
+  dump_index++;
+
+  file.close();
+}
+
+/* ----------------------------------------------------------------------
+dump all event_list in one file
+this function dump the event information during add_event
+------------------------------------------------------------------------- */
+void Appcoros::dump_event_all(int style, int which, int jpartner, int next, double propensity)
+{
+string filename = "all.dump_eventlist";
+if(dump_event_all_file == 0){
+  ofstream file(filename);
+  string header = "index style which jpartner next propensity\n";
+  file << header;
+  dump_event_all_file = 1;
+  file.close();
+}
+
+//freopen(file, filename);
+ofstream file (filename, ios_base::app);
+file << dump_event_all_index << " "
+     << style << " "
+     << which << " "
+     << jpartner << " "
+     << next << " "
+     << propensity << " \n";
+dump_event_all_index ++;
+file.close();
+}

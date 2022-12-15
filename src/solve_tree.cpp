@@ -128,7 +128,7 @@ int SolveTree::event(double *pdt)
   m = find(r2*sum);
 
   *pdt = -1.0/sum * log(random->uniform());
-
+  
   return m;
 }
 

@@ -1568,7 +1568,10 @@ double AppBccOcta::total_energy( )
 {
   double penergy = 0.0;
   for(int i = 0; i < nlocal; i++) penergy += sites_energy(i,engstyle);
-
+  //LC check
+//   for (int i = 0; i < nevents; i++){
+//     fprintf(screen, "index: %d ,rstyle: %d, jid: %d , element[j]: %d \n",i , events[i].style,  events[i].jpartner, element[events[i].jpartner]);
+// }
   return penergy;
 }
 
@@ -1850,4 +1853,3 @@ void AppBccOcta::sink_creation(int n)
     }
   }
 }
-

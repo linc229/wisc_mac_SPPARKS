@@ -15,10 +15,10 @@
 ------------------------------------------------------------------------- */
 
 /* Things to be done
- * 1. Remove accelerated diffusion
+ * 1. Update accelerated diffusion
  * (Done) 2. Correct diffusion calculation
  * (Done) 3. Add corrections to energy and barrier for different interstitials
- * 4. Enable ct_site calculation to show the spatial distribution of concentrations
+ * (Done) 4. Enable ct_site calculation to show the spatial distribution of concentrations
  * 5. Add full references to models
  * 6. Update reaction
 */
@@ -70,14 +70,14 @@ AppSeg::AppSeg(SPPARKS *spk, int narg, char **arg) :
   // darray 1-4 for msd if activated, followed by concentrations if activated, needs the initial atomic id, defined as aid
   if (diffusionflag > 0) {ninteger++; ndouble += 4;}
   if (narg >= 4) concentrationflag = atoi(arg[3]);
-  // calculate concentration fiels for each elements, so that concentrationflag = nelement
+  // calculate concentration fields for each elements, so that concentrationflag = nelement
   if (concentrationflag) {
      ndiff = 4*diffusionflag;
      ndouble += concentrationflag+1;
   }
 
   create_arrays();
- 
+
   firsttime = 1;
   esites = NULL;
   echeck = NULL;
@@ -95,7 +95,9 @@ AppSeg::AppSeg(SPPARKS *spk, int narg, char **arg) :
   ebond2 = NULL;
   mbarrier = NULL;
   hcount = NULL; //numner of vacancy switch events
+  //nn1flag = nn2flag = barrierflag = 0; //flags for bond energy and migration barriers
   nn1flag = nn2flag = barrierflag = 0; //flags for bond energy and migration barriers
+  mfpflag = 0; // Peng: mfpflag
 
   // flags and parameters for sinks, dislocations, reactions
   sink_flag = elastic_flag = moduli_flag = dislocation_flag = reaction_flag = acceleration_flag = 0; //flags for sink dislocation and vacancy
@@ -153,7 +155,6 @@ AppSeg::~AppSeg()
 {
   delete [] esites;
   delete [] echeck;
-  delete [] hcount; // number of vacancy switch
   delete ranseg;
 
   memory->sfree(events);
@@ -164,6 +165,7 @@ AppSeg::~AppSeg()
   memory->destroy(nsites_local);
   memory->destroy(edumbbell);
   memory->destroy(vdumbbell);
+  memory->destroy(hcount);
 
   if (engstyle == 2) {// memory use for 2NNs
     memory->destroy(numneigh2);
@@ -203,6 +205,14 @@ AppSeg::~AppSeg()
     memory->destroy(time_old);
     memory->destroy(time_new);
   }
+
+
+  if (mfpflag) {// memory use for accelerate simulation (Peng: mfpflag)
+    memory->destroy(rhmfp);
+    memory->destroy(nhmfp);
+    memory->destroy(mfp);
+  }
+
 
   if (reaction_flag) {// memory use related to reaction
     memory->destroy(rsite);
@@ -245,10 +255,9 @@ void AppSeg::input_app(char *command, int narg, char **arg)
     memory->create(ct,nelement,"app/seg:ct"); //time averaged concentration based on the fractional occupation at each site
     memory->create(ct_new,nelement,"app/seg:ct_new"); //time averaged concentration
     memory->create(ebond1,nelement,nelement,"app/seg:ebond1"); // 1NN bond energy
+    memory->create(hcount,nlattice,"app/erad:hcount");
     if(diffusionflag) memory->create(Lij,nelement,nelement,"app/seg:Lij"); //Onsager coefficient
     if(concentrationflag) memory->create(ct_site,nelement,nlocal,"app/seg:ct_site"); //site coefficient
-
-    hcount = new int [nelement]; // total numner of switching with a vacancy;
 
     if(narg != nelement*(nelement+1)/2+1) error->all(FLERR,"Illegal ebond1 command");
     nn1flag = 1;
@@ -553,6 +562,26 @@ void AppSeg::input_app(char *command, int narg, char **arg)
     nballistic ++; // number of mixing events
   }
 
+// meam hop steps before absorption by external sink (Peng: mfpflag)
+  else if (strcmp(command, "mfp") ==0) {
+
+    if (narg < 2 || narg % 2 == 0) error->all(FLERR,"Illegal mfp command");
+
+    mfpflag = 1;
+    memory->create(mfp,nelement+1,"app/seg:mfp");
+    memory->create(nhmfp,nelement+1,"app/seg:nhmfp");
+    memory->create(rhmfp,nelement+1,"app/seg:rhmfp");
+
+    for (i = 0; i < nelement; i++) mfp[i] = -1.0;
+
+    sigmamfp = atof(arg[0]);
+    for (i=1; i<narg-1; i++) {
+      if(i % 2 == 1) { j = atoi(arg[i]);
+        mfp[j] = atof(arg[i+1]);
+      }
+    }
+  }
+
   else error->all(FLERR,"Unrecognized command");
 }
 
@@ -697,6 +726,7 @@ void AppSeg::init_app()
       target_global[i] = 0;
       target_local[i] = 0;
     }
+    //check_reaction();
   }
 
   // initial recombination, elements created on sinks will be absorbed
@@ -710,6 +740,20 @@ void AppSeg::init_app()
        time_old[i] = 0;
        time_new[i] = 0;
     }
+  }
+
+  // initialize mfp calculations(Peng: mfpflag)
+  if(mfpflag) {
+    for (i = 0; i < nlocal+nghost; i++) hcount[i] = 0;
+    for (i = 0; i < nelement; i++) {
+    //for (i = 0; i <= nelement; i++) {
+        rhmfp[i] = 0.0;
+        nhmfp[i] = 0;
+    }
+
+    varmfp = 2.0*sigmamfp; //sqrt(2*pi)*sigma
+    sigmamfp *= sigmamfp;
+    sigmamfp *= 2.0; //2*sigma^2
   }
 
   // initialize the time_list for sink motion
@@ -737,7 +781,7 @@ void AppSeg::init_app()
     for (i = 0; i < 3; i++) {
     	for (j = 0; j < nelement; j++) {
 	   total_disp[i][j] = 0.0;
-        } 
+        }
     }
   }
 
@@ -749,7 +793,7 @@ if(concentrationflag) {
      ct[i] = 0.0;
      ct_new[i] = 0.0;
 
-     //initiallize initial concentration 
+     //initiallize initial concentration
      for(j = 0; j < nlocal; j ++) {
 	ct_site[i][j] = 0.0;
 	disp[i+ndiff][j] = 0.0;
@@ -821,30 +865,30 @@ void AppSeg::set_dumbbell()
 
  for (i = 0; i < nlocal; i++) {
      if(element[i] != INT) {
-	dmb1[i] = -1;
+	      dmb1[i] = -1;
         dmb2[i] = -1;
-	siatype[i] = -1;
+	      siatype[i] = -1;
      } else {
- 	siatype[i] = static_cast<int>(ranseg->uniform()*3);
+       siatype[i] = static_cast<int>(ranseg->uniform()*3);
 
-	j = CE1;
-	double randme1 = ranseg->uniform()*ctotal; //get 2 random # to find 2 dumbbell atoms
-        double randme2 = ranseg->uniform()*ctotal;
-	while(dmb1[i] <= 0) {
-            if(randme1 < ci[j]) dmb1[i] = j;
-	    randme1 -= ci[j];
-	    j++;
-            if(j==nelement) dmb1[i] = nelement - 1;
-	}
+	     j = CE1;
+       double randme1 = ranseg->uniform()*ctotal; //get 2 random # to find 2 dumbbell atoms
+       double randme2 = ranseg->uniform()*ctotal;
+       while(dmb1[i] <= 0) {
+          if(randme1 < ci[j]) dmb1[i] = j;
+          randme1 -= ci[j];
+          j++;
+          if(j==nelement) dmb1[i] = nelement - 1;
+        }
 
-	j = CE1;
-	while(dmb2[i] <= 0) {
-            if(randme2 < ci[j]) dmb2[i] = j;
-	    randme2 -= ci[j];
-	    j++;
-            if(j==nelement) dmb2[i] = nelement - 1;
-	}
-     }
+      j = CE1;
+      while(dmb2[i] <= 0) {
+        if(randme2 < ci[j]) dmb2[i] = j;
+        randme2 -= ci[j];
+        j++;
+        if(j==nelement) dmb2[i] = nelement - 1;
+      }
+    }
  }
 
  return;
@@ -887,7 +931,6 @@ void AppSeg::setup_app()
 /* ----------------------------------------------------------------------
    compute energy of site i
 ------------------------------------------------------------------------- */
-
 double AppSeg::sites_energy(int i, int estyle)
 {
   int j,jd,ejd,n1nn;
@@ -938,6 +981,68 @@ double AppSeg::sites_energy(int i, int estyle)
   //bond energy shared equally by i & j
   return eng/2.0;
 }
+
+/*double AppSeg::sites_energy(int i, int estyle)
+{
+  int j,jd,ejd,n1nn;
+  double eng = 0.0;
+  double cij = 0.0;
+
+  if(estyle == 0) return eng;
+
+  //energy from 1NN bonds
+  int ei = element[i];
+  n1nn = numneigh[i];  //num of 1NN
+  for (j = 0; j < n1nn; j++) {
+    jd = neighbor[i][j];
+    ejd = element[jd];
+
+    //adjust A-V bond based on local concentration, currently added for solute trapping (Peng: sia interaction, need change)
+    if(trap[ei] && ejd == VAC) {
+       cij = site_concentration(i,estyle);
+       eng += cij*ebond1[ei][ejd];
+    } else if(trap[ejd] && ei == VAC) {
+       cij = site_concentration(jd,estyle);
+       eng += cij*ebond1[ei][ejd];
+    } else if(ei == INT && ejd == INT) {
+        //eng += ebond1[dmb1[i]][dmb1[jd]]+ebond1[dmb1[i]][dmb2[jd]]+ebond1[dmb2[i]][dmb1[jd]]+ebond1[dmb2[i]][dmb2[jd]];
+        //total interaction: sitei dmb atom to site j dmb atom
+    } else if (ejd == INT) {
+      fprintf(screen, "ejd %d %d\n", dmb1[jd], dmb2[jd]);
+      eng += ebond1[dmb1[jd]][ei]+ebond1[dmb2[jd]][ei];
+      //total interaction: site i to dmb1 atom + site i to dmb2 atom + site i to other 1nns
+    } else if (ei == INT) {
+      //eng += ebond1[dmb1[i]][ejd]+ebond1[dmb2[i]][ejd]+ebond1[dmb1[i]][dmb2[i]];
+      //total interaction: site i dmb1 atom to dmb2 atom + site i dmb1 to other neighbors + site i dmb2 to other 1nns
+    } else {
+       eng += ebond1[ei][ejd];
+       // total interaction: site i to 1nns
+    }
+  }
+
+  //energy from 2NN bonds
+  if (estyle == 2) {
+    int n2nn = numneigh2[i];
+    for (j = 0; j < n2nn; j++) {
+      jd = neighbor2[i][j];
+      ejd = element[jd];
+
+      //adjust A-V bond based on local concentration
+      if(trap[ei] && ejd == VAC) {
+         cij = site_concentration(i,estyle);
+         eng += cij*ebond2[ei][ejd];
+      } else if(trap[ejd] && ei == VAC) {
+         cij = site_concentration(jd,estyle);
+         eng += cij*ebond2[ei][ejd];
+      } else {
+         eng += ebond2[ei][ejd];
+      }
+    }
+  }
+
+  //bond energy shared equally by i & j
+  return eng/2.0;
+}*/
 
 /* ----------------------------------------------------------------------
   compute local concentration to adjust solute-V bond energy
@@ -1060,7 +1165,7 @@ double AppSeg::sia_SP_energy(int i, int j, int estyle)
   }
 
   //double prdt = dij[0]*vect[0] + dij[1]*vect[1] + dij[2]*vect[2];
-  if (dij[itype] == 0.0) return -1.0; // dumb1 diffuses to upper or lower planes
+  if (dij[itype] == 0.0) return -1.0; // dumb1 diffuses to upper or lower planes//***
 
   // calcualte barrier if i->j exists
 
@@ -1091,6 +1196,8 @@ double AppSeg::sia_SP_energy(int i, int j, int estyle)
   eng1j = sites_energy(j,estyle); // total bonds with j after switch
   eng1i += edumbbell[ej][sia[m]]/2.0; // dumbbell at j contains ej and sia[m]
 
+  //fprintf(screen,"eng %f %f %f %f \n", eng0i, eng0j, eng1i, eng1j);
+
   // switch back
   element[j] = ej;
   element[i] = ei;
@@ -1101,6 +1208,7 @@ double AppSeg::sia_SP_energy(int i, int j, int estyle)
 
   //for SIA the diffusion is given by itself, correction may be added for different types of interstitials
   eng = mbarrier[ei] + eng1i + eng1j - eng0i -eng0j;
+  //fprintf(screen,"eng %f %f %f %f %f \n", eng, eng0i, eng0j, eng1i, eng1j);
 
   //Contribution from segregation energy difference before and after switch; defects one step away from sink will automatically jump to sink
   if(eisink_flag && (isink[i] > 0 || isink[j] > 0)) {
@@ -1116,14 +1224,14 @@ double AppSeg::sia_SP_energy(int i, int j, int estyle)
 
     eng += (eij - eii + eji - ejj)/2.0;
   }
-
+  //fprintf(screen,"eng %f \n", eng);
   //add elastic contribution if applicable
   if(elastic_flag)
     eng += (elastic_energy(j,ei) - elastic_energy(i,ei) + elastic_energy(i,ej) - elastic_energy(j,ej))/2.0;
-
+  //fprintf(screen,"eng %f \n", eng);
+  //fprintf(screen,"eng %f %f %f %f %f %f\n", eng, mbarrier[ei], eng0i, eng0j, eng1i, eng1j);
   //add barrier correction by averaging starting and ending sia, in order to satisfy detailed balance
   eng += (emdumbbell[sia[1]][sia[2]] + emdumbbell[ej][sia[m]])/2;
-
   return eng;
 }
 
@@ -1188,9 +1296,9 @@ double AppSeg::site_propensity(int i)
       if(type[jid] == WALL) continue; // no crossing the wall
       if(element[jid] == INT) continue; // no SIA-SIA exchange;
 
-      ebarrier = sia_SP_energy(i,jid,engstyle); //
+      ebarrier = sia_SP_energy(i,jid,engstyle);
       if(ebarrier >= 0) {
-	hpropensity = exp(-ebarrier/KBT);
+        hpropensity = exp(-ebarrier/KBT);
       	add_event(i,jid,1,1,hpropensity);
         prob_hop += hpropensity;
       }
@@ -1200,6 +1308,8 @@ double AppSeg::site_propensity(int i)
       //prob_hop += hpropensity;
     }
   }
+  //fprintf(screen,"ebarrier %f %i %i\n", ebarrier, i, jid);
+
   return prob_hop + prob_reaction;
 }
 
@@ -1230,6 +1340,8 @@ void AppSeg::site_event(int i, class RandomPark *random)
   int which = events[ievent].which; // type of reactions or neighbor id for acceleration
   j = events[ievent].jpartner;
 
+  //fprintf(screen,"dumbbell0 %i %i\n", dmb1[i], dmb2[i]);
+  //fprintf(screen,"eng0 %f %f %f\n", edumbbell[dmb1[i]][dmb2[i]], sites_energy(i,engstyle), total_energy());
   // switch element between site i and jpartner for hop diffusion
   // style 3 and 4 not currently used
   if(rstyle == 1 || rstyle == 3 || rstyle ==4) {
@@ -1244,15 +1356,25 @@ void AppSeg::site_event(int i, class RandomPark *random)
         element[i] = element[j];
         element[j] = k;
       } else { //SIA switch
-	//count_dumbbell(i); // count the number of each chemical type of sias; enable when needed.
+	      count_dumbbell(i); // count the number of each chemical type of sias; enable when needed.
         SIA_switch(i,j);
       }
+
     }
+    // Peng: mfpflag
+    hcount[i] ++;
+    if(mfpflag && mfp[element[j]] > 0.0) {
+      k = hcount[i];
+      hcount[i] = hcount[j];
+      hcount[j] = k;
 
-    hcount[element[i]] ++;
+      if(hcount[j] > mfp[element[j]]) { // the defect will be absorbed
+        mfp_absorption(j);
+     }
+   }
 
-    // calculate MSD for each atom if activated. This is for vacancy diffusion only 
-    // This is valid only without defect generation and annihilation 
+    // calculate MSD for each atom if activated. This is for vacancy diffusion only
+    // This is valid only without defect generation and annihilation
     // MDS calcualtion for SIA diffusion is taken care of in SIA_switch()
     if(diffusionflag && element[j] == VAC) {
       // switch global atomic id
@@ -1297,6 +1419,8 @@ void AppSeg::site_event(int i, class RandomPark *random)
     }
   }
 
+  //fprintf(screen,"dumbbell1 %i %i\n", dmb1[j], dmb2[j]);
+  //fprintf(screen,"eng1 %f %f\n", sites_energy(i,engstyle), total_energy());
   // perform zero_barrier events: absorption and recombination
   int rid = recombine(i); // recombine site i with its neighbor rid
   if(rid >= 0) update_propensity(rid);
@@ -1320,6 +1444,10 @@ void AppSeg::site_event(int i, class RandomPark *random)
   update_propensity(i);
   if(rstyle == 1 || rstyle == 3 || rstyle == 4) update_propensity(j);
 
+  //LC check
+  if (element[j] == element[i]){
+    fprintf(screen,"ievent: %d,i:%d, element[i]:%d, jid:%d, element[j]:%d propensity:%e \n",ievent,i, element[i], j, element[j], events[ievent].propensity);
+}
   // check if any reactions needs to be disabled or enabled
   if(reaction_flag == 1) {
     for(ii = 0; ii < nreaction; ii ++) {
@@ -1484,26 +1612,26 @@ void AppSeg::count_dumbbell(int m)
 {
   int i,j,k;
 
-  /*for(i == 0; i < number_sia; i ++) {nsia[i] = 0.0;}
-  for(m == 0; m < nlocal; m++) {
-     if(siatype[m] >= 0) {
-    	 i = ((dmb1[m]<dmb2[m]) ? dmb1[m] : dmb2[m]) - 1;
-    	 j = ((dmb1[m]>=dmb2[m]) ? dmb1[m] : dmb2[m]) - 1;
-
-         k = (i-1)*(nelement-2) + j - i*(i-1)/2 - 1;
-         nsia[k] ++;
-     }
-  }*/
-
   // count by the frequencies of each type of sias (maybe more accurate by time?)
   if(siatype[m] >= 0) {
-     i = ((dmb1[m]<dmb2[m]) ? dmb1[m] : dmb2[m]) - 1;
-     j = ((dmb1[m]>=dmb2[m]) ? dmb1[m] : dmb2[m]) - 1;
+     i = ((dmb1[m]<dmb2[m]) ? dmb1[m] : dmb2[m]) - 1; //if dmb1<dmb2, i = dmb1-1; if dmb1>=dmb2, i=dmb2-1
+     j = ((dmb1[m]>=dmb2[m]) ? dmb1[m] : dmb2[m]) - 1;//if dmb1>=dmb2, j = dmb1-1; if dmb1<dmb2, j=dmb2-1
 
      k = (i-1)*(nelement-2) + j - i*(i-1)/2 - 1;
      //nsia[k] ++; // count by frequency
-     nsia[k] += dt_step; // count by residence time
-     //fprintf(screen,"dt_step %d %f %f\n",k,nsia[k],dt_step);
+     nsia[k] += dt_step; // count by residence time (*dt_step has no definition)
+
+     /*for(i == 0; i < number_sia; i ++) {nsia[i] = 0.0;}
+     for(m == 0; m < nlocal; m++) {
+        if(siatype[m] >= 0) {
+         i = ((dmb1[m]<dmb2[m]) ? dmb1[m] : dmb2[m]) - 1;
+         j = ((dmb1[m]>=dmb2[m]) ? dmb1[m] : dmb2[m]) - 1;
+
+            k = (i-1)*(nelement-2) + j - i*(i-1)/2 - 1;
+            nsia[k] ++;
+        }
+     }*/
+
   }
 
   return;
@@ -1542,7 +1670,7 @@ void AppSeg::SIA_switch(int i, int j)
 	 if(dij[k] > 0) jm = 2;
       }
 
-      // calcualte displacement for onsager coefficient calculation 
+      // calcualte displacement for onsager coefficient calculation
       if(diffusionflag) total_disp[k][INT] += dij[k];
   }
 
@@ -1562,13 +1690,13 @@ void AppSeg::SIA_switch(int i, int j)
      dmb1[j] = ej;
   }
 
-  // calculate displacement for onsager coefficient calculation 
+  // calculate displacement for onsager coefficient calculation
   // This assumes a dumbbell separation of 1/2 a0
-  // The total displacement of dij[k] is splitted into three atoms 
+  // The total displacement of dij[k] is splitted into three atoms
   if(diffusionflag) {
     for (k = 0; k < 3; k++) total_disp[k][sia[m]] += dij[k]/2.0; // displacement of atom that moves
-    total_disp[itype][sia[n]] += dij[itype]/2.0; // atom that stays moves by half of a dumbbell separation 
-    total_disp[siatype[j]][ej] += dij[siatype[j]]/2.0; // the new dumbbell atom moves by half of a dumbbell separation. Displacement along the 3rd direction is zero. 
+    total_disp[itype][sia[n]] += dij[itype]/2.0; // atom that stays moves by half of a dumbbell separation
+    total_disp[siatype[j]][ej] += dij[siatype[j]]/2.0; // the new dumbbell atom moves by half of a dumbbell separation. Displacement along the 3rd direction is zero.
   }
 
   //diagnose the diffusion path
@@ -1729,7 +1857,7 @@ void AppSeg::frenkelpair()
 {
   int i,id,vid,iid;
 
-  // creat an vacancy
+  // create an vacancy
   int allsites = 0;
   for (i = CE1; i < nelement; i++) allsites += nsites_local[i];
   if(allsites == 0) error->all(FLERR, "No matrix sites available for FP generation!");
@@ -2010,7 +2138,7 @@ void AppSeg::absorption(int i)
 
      // mix the two dumbbell atoms with the atoms in sink n
      // then ramdomly select one to be put into reservior
-     // the probability of dumb1 or dumb2 or a sink atom to go to resevior is 1/(nsink_site+1) 
+     // the probability of dumb1 or dumb2 or a sink atom to go to resevior is 1/(nsink_site+1)
 
      j = static_cast<int>(ranseg->uniform()*(sinksite[n-1]+2));
      if(j == sinksite[n-1]+1) { //dmb2 goes to reservior
@@ -2035,6 +2163,9 @@ void AppSeg::absorption(int i)
      siatype[i] = -1;
   }
 
+  //Peng: mfpflag reset jump steps of site i
+  if(mfpflag) hcount[i] = 0;
+
   // update reaction target number
   if (reaction_flag == 1) {
      for(j = 0; j < nreaction; j++) {
@@ -2053,6 +2184,35 @@ void AppSeg::absorption(int i)
   }
 
   return;
+}
+
+/*----------------------------------------------------------------------
+   (Peng: mfpflag) mfp absorption of an element at site i.
+-------------------------------------------------------------------------*/
+
+void AppSeg::mfp_absorption(int i)
+{
+  int j,k,l,m,n,ii;
+
+  nhmfp[element[i]] ++; //record # of defects absorbed by mean field sink
+  rhmfp[element[i]] += hcount[i]; //record total # of movement for type of defect absorbed by mean field sink
+
+  nsites_local[element[i]] --;
+
+  //define type of element, use initial global concentration as criteria (is the criteria correct?)
+  double crit = 0.0;
+  //for (m = CE1; m <= nelement; m++) {
+  for (m = CE1; m < nelement; m++) {
+   crit += ci[m]; // here use element initial global concentration (ci[m])
+   double rand_number = ranseg->uniform();
+   if(rand_number < crit) {
+     element[i] = m;
+     break; // jump out of the for loop
+   }
+  }
+
+  nsites_local[m] ++;
+  hcount[i] = 0;
 }
 
 /*-----------------------------------------------------------------
@@ -2105,6 +2265,8 @@ int AppSeg::recombine(int i)
       nsites_local[element[jd]] ++;
 
      // if(mfpflag) {hcount[i] = 0; hcount[m] = 0;}
+     if(mfpflag) {hcount[i] = 0; hcount[jd] = 0;} //Peng: mfpflag
+
      // update reaction target number
      if(reaction_flag == 1) {
        for(int k = 0; k < nreaction; k++) {
@@ -2152,12 +2314,17 @@ double AppSeg::total_energy( )
     }
   }
 
+//LC check
+  // for (int i = 0; i < nevents; i++){
+  //   fprintf(screen, "index: %d ,rstyle:%d, jid: %d , element[j]: %d \n",i ,events[i].style,  events[i].jpartner, element[events[i].jpartner]);
+  //      }
+
   return penergy;
 }
 
 /* ----------------------------------------------------------------------
   calculate the Onsager coefficient based on atomic displacement
-  Lij=<DR_i>*<Dr_j>/6VKbTt; 
+  Lij=<DR_i>*<Dr_j>/6VKbTt;
 ------------------------------------------------------------------------- */
 void AppSeg::onsager(double t)
 {
@@ -2252,7 +2419,7 @@ void AppSeg::ris_time()
   for(i = 0; i < nlocal; i++) {
      int iz = static_cast<int>(xyz[i][2] - boxlo[2]);
      if(concentrationflag) {
-       icell[iz][element[i]] += disp[ndiff+element[i]][i]; 
+       icell[iz][element[i]] += disp[ndiff+element[i]][i];
      } else {
        icell[iz][element[i]] += 1.0;
      }
@@ -2333,6 +2500,36 @@ int AppSeg::vacancy_trap(int i)
   }
 
   return 1;
+}
+
+/* ----------------------------------------------------------------------
+  Peng: check if the neighbor of certain B atom are all A atoms or not and count
+The number of B monomers and dimers
+------------------------------------------------------------------------- */
+int AppSeg::solubility(int n)
+{
+  int j,jd,k,z;
+
+  //check neighbor for B atoms
+  di_mono = 0;
+  for (j = 0; j < nlocal; j++) {
+    z = 0;
+    if (element[j] == n) {
+      for (k = 0; k < numneigh[j];k++){
+        jd = neighbor[j][k];
+        if (element[jd] != n) {
+        }
+        else {
+          z = z+1;
+        }
+      }
+
+      if (z <= 1){
+        di_mono = di_mono+1;
+        }
+    }
+  }
+  return di_mono;
 }
 
 /* ----------------------------------------------------------------------

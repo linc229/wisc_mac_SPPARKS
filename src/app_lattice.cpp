@@ -85,7 +85,8 @@ AppLattice::AppLattice(SPPARKS *spk, int narg, char **arg) : App(spk,narg,arg)
   app_update_only = 0;
   reaction_flag = ballistic_flag = frenkelpair_flag = time_flag = sinkmotion_flag = clst_flag = concentrationflag = 0; //yongfeng
   saltdiffusion_flag = 0; //LC
-  KMC_stop_flag = 1;
+  dump_event_flag = 1; // LC
+  KMC_stop_flag = 1; //LC
 }
 
 /* ---------------------------------------------------------------------- */
@@ -345,6 +346,7 @@ void AppLattice::setup()
     }
   }
 
+
   // check reaction before simulation, yongfeng
   if(reaction_flag)  check_reaction();
 
@@ -362,24 +364,20 @@ void AppLattice::setup()
       double pmax = 0.0;
       for (int i = 0; i < nset; i++) {
 	int ntmp = set[i].solve->get_num_active();
-  //fprintf(screen,"ntmp: %d\n",ntmp); // LC check print
+
 	if (ntmp > 0) {
 	  double ptmp = set[i].solve->get_total_propensity();
 	  ptmp /= ntmp;
 	  pmax = MAX(ptmp,pmax);
-    //fprintf(screen,"ptmp: %d\n",ptmp); // LC check print
-    //fprintf(screen,"pmax: %f\n",pmax); // LC check print
 	}
       }
       double pmaxall;
       MPI_Allreduce(&pmax,&pmaxall,1,MPI_DOUBLE,MPI_MAX,world);
       if (pmaxall > 0.0) dt_kmc = nstop/pmaxall;
       else dt_kmc = stoptime-time;
-      //fprintf(screen,"nstop: %f, pmaxall: %f\n",nstop, pmaxall); // LC check print
     }
 
     dt_kmc = MIN(dt_kmc,stoptime-time);
-    //fprintf(screen,"dt_kmc: %f\n",dt_kmc); // LC check print
   }
 
   // convert rejection info to rKMC params
@@ -444,12 +442,17 @@ void AppLattice::setup()
   // setup future output
 
   nextoutput = output->setup(time,first_run);
+
+  // dump dump.0 event list by LC;
+  if (dump_event_flag) dump_event();
+
 }
 
 /* ---------------------------------------------------------------------- */
 
 void AppLattice::iterate()
 {
+
   timer->barrier_start(TIME_LOOP);
 
   if (solve) {
@@ -567,7 +570,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     for (int iset = 0; iset < nset; iset++) { //LC note:  nset == nsector == "4" from sector setting
       timer->stamp();
 
-      if (nprocs > 1) {  // LC note: not used nprocs ==1
+      if (nprocs > 1) {  // LC note: not used, nprocs ==1
 	comm->sector(iset);
 	timer->stamp(TIME_COMM);
       }
@@ -587,30 +590,26 @@ void AppLattice::iterate_kmc_sector(double stoptime)
       int nborder = set[iset].nborder;
 
       int nsites = 0;
-      for (int m = 0; m < nborder; m++) {
+      for (int m = 0; m < nborder; m++) { // LC note: update border between sectors
 	i = border[m];
 	isite = i2site[i];
 	bsites[nsites++] = isite;
 	propensity[isite] = site_propensity(i);
       }
 
-      solve->update(nsites,bsites,propensity);
-      timer->stamp(TIME_COMM);
+       solve->update(nsites,bsites,propensity);
+       timer->stamp(TIME_COMM);
 
       // pmax = maximum sector propensity per site
 
       if (Ladapt) {
 	int ntmp = solve->get_num_active();
-  //fprintf(screen,"ntmp: %d\n",ntmp); // LC check print number of active site
 	if (ntmp > 0) {
 	  double ptmp = solve->get_total_propensity();
 	  ptmp /= ntmp;
 	  pmax = MAX(ptmp,pmax);
-    //fprintf(screen,"ptmp: %d\n",ptmp); // LC check print total propensity/active site
-    //fprintf(screen,"pmax: %f\n",pmax); // LC check print max of ptmp
 	}
       }
-//fprintf(screen,"pmax: %f\n",pmax); // LC check print
       // execute events until sector time threshhold reached
 
       done = 0;
@@ -631,12 +630,14 @@ void AppLattice::iterate_kmc_sector(double stoptime)
             if(time_flag) time_tracer(dt); //yongfeng, pass dt to app_rpv
 	    site_event(site2i[isite],ranapp);
 	    naccept++; // LC note: actuall number of event
-      //fprintf(screen,"iset, %d, dt: %f \n",iset,  dt); // LC check print
+
       if (concentrationflag) concentration_field(dt); //yongfeng, LC --edited, this function should be located after site_event
 	  }
 	  timer->stamp(TIME_APP);
 	}
+
       }
+
 
       if (nprocs > 1) {  // LC note: not used nprocs ==1
 	comm->reverse_sector(iset);
@@ -657,7 +658,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (ballistic_flag) check_ballistic(time); //yongfeng
     if (frenkelpair_flag) check_frenkelpair(time); //yongfeng
     if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
-    //if (concentrationflag) concentration_field(dt_kmc); //yongfeng, LC
+    //if (concentrationflag) concentration_field(dt_kmc); //yongfeng, LC move inside the iteration per event
 
     //if (ballistic_flag) sia_concentration(dt_kmc); // yongfeng
     if (saltdiffusion_flag) check_saltdiffusion(time);// LC
@@ -670,7 +671,8 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (alldone || time >= nextoutput) {
        if(clst_flag) cluster(); //yongfeng
        if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration, LC
-       nextoutput = output->compute(time,alldone);} // LC note: here stats and dump --> compute function in output.cpp
+       nextoutput = output->compute(time,alldone); //LC note: here stats and dump --> compute function in output.cpp
+        }
     timer->stamp(TIME_OUTPUT);
 
     // recompute dt_kmc if adaptive, based on pmax across all sectors
@@ -681,7 +683,6 @@ void AppLattice::iterate_kmc_sector(double stoptime)
       else dt_kmc = stoptime-time;
       dt_kmc = MIN(dt_kmc,stoptime-time);
     }
-    //fprintf(screen,"dt_kmc: %f\n",dt_kmc); // LC check print
   }
 
   // restore system solver
@@ -848,7 +849,7 @@ void AppLattice::input_app(char *command, int narg, char **arg)
 }
 
 /* ---------------------------------------------------------------------- */
-
+//LC note: this func setting up sector 
 void AppLattice::set_sector(int narg, char **arg)
 {
   if (narg < 1) error->all(FLERR,"Illegal sector command");

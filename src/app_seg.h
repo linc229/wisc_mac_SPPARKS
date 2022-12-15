@@ -40,6 +40,7 @@ class AppSeg : public AppLattice {
 
  private:
   int engstyle,nn1flag,nn2flag,barrierflag,seg_flag; // 1NN or 2NN bonds
+  int mfpflag; //Peng: mfpflag
   int ndiff,number_sia,ndumbbell;
   int *type,*element,*dmb1,*dmb2,*aid,*siatype; // variables on each lattice site
   int firsttime;
@@ -64,6 +65,12 @@ class AppSeg : public AppLattice {
   int *hcount;
   int periodicity[3]; //periodicity;
   double total_disp[3][10],boxlo[3],lprd[3],volume; //simulation cell size
+
+  /*-----------------------------Peng: mfpflag-------------------------------*/
+  double sigmamfp,varmfp; //rate and propensity for hop diffusion
+  double *mfp,*rhmfp; //migration barriers
+  int *nhmfp;
+  /*=========================================================================*/
 
   int nrecombine[9]; //number of recombination event
 
@@ -138,6 +145,7 @@ class AppSeg : public AppLattice {
   int maxevent;            // max # of events list can hold
   int *firstevent;         // index of 1st event for each owned site
   int freeevent;           // index of 1st unused event in list
+  int di_mono;                // Peng: number of B monomers
 
   int ibonde(int, int, int);  //list to matrix bond energy
   void define_2NN();
@@ -162,6 +170,7 @@ class AppSeg : public AppLattice {
   void frenkelpair();
   void absorption(int);
   void ballistic_probability(int);
+  void mfp_absorption(int);//Peng: mfpflag
 
   void grow_dislocations(); //dislocation
   void stress_field(int);
@@ -203,6 +212,7 @@ class AppSeg : public AppLattice {
   void ris_time(); // calculate ris
   void onsager(double); // calculate the Onsager coefficients
   void short_range_order(); // calculate the short range order
+  int solubility(int); // Peng:function of B_monomer & dimer
 };
 
 }

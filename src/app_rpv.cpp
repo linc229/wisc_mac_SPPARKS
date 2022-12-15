@@ -26,8 +26,11 @@
 #include "random_mars.h"
 #include "memory.h"
 #include "error.h"
-
+//LC check
+#include <iostream>
+#include <fstream>
 using namespace SPPARKS_NS;
+#include "app_lattice.h"
 
 enum{NOOP,BCC,NBCC};                          // all sites are BCC except for SIAs; type
 enum{ZERO,FE,VACANCY,CU,NI,MN,Si,P,C,SIA};       // same as DiagRpv; element
@@ -772,7 +775,9 @@ void AppRpv::site_event(int i, class RandomPark *random)
   int rstyle = events[ievent].style;
   int which = events[ievent].which; // type of reactions or neighbor id for acceleration
   j = events[ievent].jpartner;
-
+  if (element[j]==2){
+    fprintf(screen, "check point");
+  }
   // switch element between site i and jpartner for hop diffusion
   if(rstyle == 1 || rstyle == 3 || rstyle ==4) {
     k = element[i];
@@ -1352,6 +1357,13 @@ double AppRpv::total_energy( )
       penergy += elastic_energy(j,jtype);
     }
   }
+  //LC checks
+  // dump_index = 0;
+  // fprintf(screen, "check point\n");
+  //
+  // for (int i = 0; i < nevents; i++){
+  //   fprintf(screen, "index: %d ,rstyle:%d, jid: %d , element[j]: %d \n",i ,events[i].style,  events[i].jpartner, element[events[i].jpartner]);
+  //      }
 
   return penergy/2.0;
 }
