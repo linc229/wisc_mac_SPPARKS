@@ -52,6 +52,7 @@ class ReadSites : protected Pointers {
   void neighbors();
   void values();
 
+
   int count_words(char *);
 };
 

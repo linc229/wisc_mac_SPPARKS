@@ -105,7 +105,7 @@ class Appcoros : public AppLattice {
   double *rdamp,*pn_local,*pn_global,*bfreq;
   double **xmix,**pmix;
 
-//parameter for salt potential
+//parameter for salt potential by LC
   int nsaltdiffusion; // LC
   int *potential; //atomic displacement
   int *salt_time_old,*salt_time_new;
@@ -151,8 +151,11 @@ class Appcoros : public AppLattice {
   int dump_event_all_index;
 
 
-  //parameter for monomer count
+  //parameter for monomer count by LC
   int *monomers;
+
+  //parameters for msd calculation by LC
+  double *sd;
 
   struct Event {           // one event for an owned site
     int style;             // reaction style = HOP,RECOMBINE
@@ -234,8 +237,9 @@ class Appcoros : public AppLattice {
   double **ct_site_extract(); // return ct_site **array called by app_lattice <-- dump_text
   double **i3_site_extract(); // return i3_site **array called by app_lattice <-- dump_text
   int metal_pure_vac_approxi(); //LC, return pure_vac in metal region by approximation
-  void dump_event(); // LC, dump event list per dump time as text file
+  void dump_event(double); // LC, dump event list per dump time as text file
   void dump_event_all(int, int, int, int, double); // LC dump all event list to one file
+  void MSD_calculation(); //by LC, compute MSD when atom change
 };
 
 }

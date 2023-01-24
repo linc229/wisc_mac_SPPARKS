@@ -89,7 +89,7 @@ class AppLattice : public App {
   virtual int KMC_stop() {} // LC
   virtual double **ct_site_extract() {} //LC
   virtual double **i3_site_extract() {} //LC
-  virtual void dump_event() {} // LC
+  virtual void dump_event(double) {} // LC
 
  protected:
   int me,nprocs;
@@ -120,7 +120,7 @@ class AppLattice : public App {
   int diffusionflag;           // 1 if calculate the onsager coefficient
   int saltdiffusion_flag;      // by LC 1 if app supports ballistic mixing
   int KMC_stop_flag;           // by LC
-  int dump_event_flag;         // by LC for dump_event function
+  //int dump_event_flag;         // by LC for dump_event function
 
   int sweepflag;               // set if rejection KMC solver
   int sectorflag;              // 1 if partition my domain into sectors

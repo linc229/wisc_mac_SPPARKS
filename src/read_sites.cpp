@@ -35,7 +35,7 @@ using namespace SPPARKS_NS;
 #define DELTA 4
 #define EPSILON 1.0e-6
 
-#define NSECTIONS 3       // change when add to header::section_keywords
+#define NSECTIONS 5       // change when add to header::section_keywords
 
 /* ---------------------------------------------------------------------- */
 
@@ -113,6 +113,7 @@ void ReadSites::command(int narg, char **arg)
   int neighflag = 0;
   int valueflag = 0;
 
+
   while (strlen(keyword)) {
     if (strcmp(keyword,"Sites") == 0) {
       if (app->sites_exist)
@@ -140,8 +141,10 @@ void ReadSites::command(int narg, char **arg)
       values();
       valueflag = 1;
 
-    } else {
+    }
+ else {
       char str[128];
+
       sprintf(str,"Unknown identifier in data file: %s",keyword);
       error->all(FLERR,str);
     }
@@ -151,12 +154,13 @@ void ReadSites::command(int narg, char **arg)
 
   // error checks
 
+
   if (sitesflag == 0 && neighflag == 0 && valueflag == 0)
     error->all(FLERR,"Site file has no Sites, Neighbors, or Values");
 
   if (app->sites_exist == 0) {
-    if (sitesflag == 0) error->all(FLERR,"No Sites defined in site file");
-    if (latticeflag && neighflag == 0)
+    if (sitesflag == 0 ) error->all(FLERR,"No Sites defined in site file");
+    if (latticeflag && neighflag == 0 )
       error->all(FLERR,"No Neighbors defined in site file");
     app->sites_exist = 1;
   }
@@ -537,7 +541,8 @@ void ReadSites::values()
     *next = '\0';
     int nwords = count_words(buf);
     *next = '\n';
-
+//fprintf(screen, "ninteger:%d, ndouble:%d\n",app->ninteger, app->ndouble); // LC test
+//fprintf(screen, "nwords:%d, nvalues:%d\n",nwords, nvalues); // LC test
     if (nwords != nvalues+1)
       error->all(FLERR,"Incorrect value format in data file");
 

@@ -29,7 +29,14 @@
 #include "memory.h"
 #include "error.h"
 
+//LC lib for timing
+#include <chrono>
+using std::chrono::duration;
+using std::chrono::high_resolution_clock;
+
 using namespace SPPARKS_NS;
+
+
 
 #define DELTA 32768
 
@@ -85,7 +92,7 @@ AppLattice::AppLattice(SPPARKS *spk, int narg, char **arg) : App(spk,narg,arg)
   app_update_only = 0;
   reaction_flag = ballistic_flag = frenkelpair_flag = time_flag = sinkmotion_flag = clst_flag = concentrationflag = 0; //yongfeng
   saltdiffusion_flag = 0; //LC
-  dump_event_flag = 1; // LC
+  //dump_event_flag = 1; // LC
   KMC_stop_flag = 1; //LC
 }
 
@@ -443,9 +450,6 @@ void AppLattice::setup()
 
   nextoutput = output->setup(time,first_run);
 
-  // dump dump.0 event list by LC;
-  if (dump_event_flag) dump_event();
-
 }
 
 /* ---------------------------------------------------------------------- */
@@ -481,6 +485,17 @@ void AppLattice::iterate_kmc_global(double stoptime)
 {
   int isite = -1;
 
+  //LC timing setting
+    high_resolution_clock::time_point start;
+    high_resolution_clock::time_point time_check;
+    high_resolution_clock::time_point end;
+    duration<double, std::milli> duration_sec;
+    duration<double, std::milli> border_time;
+    duration<double, std::milli> site_time;
+    duration<double, std::milli> saltdiff_time;
+    start = high_resolution_clock::now();
+    time_check = high_resolution_clock::now();
+
   // global KMC runs with one set
   // save ptr to system solver
 
@@ -491,9 +506,12 @@ void AppLattice::iterate_kmc_global(double stoptime)
 
   int done = 0;
   while (!done) {
+
     timer->stamp();
     isite = solve->event(&dt_step);
     timer->stamp(TIME_SOLVE);
+
+
 
     if(ballistic_flag && dt_step > min_bfreq) dt_step = min_bfreq; //Yongfeng, double check later!!!
     if(frenkelpair_flag && dt_step > min_fpfreq) dt_step = min_fpfreq; //Yongfeng, double check later!!!
@@ -505,16 +523,27 @@ void AppLattice::iterate_kmc_global(double stoptime)
          time_tracer(dt_step);
          realtime += dt_step*real_time(time);
       }
+
+      //LC timing
+      border_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
+      time_check = high_resolution_clock::now();
+
       if (time <= stoptime) {
 	site_event(isite,ranapp);
 	naccept++;
+
+  //LC timing
+  site_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
+  time_check = high_resolution_clock::now();
         if (reaction_flag) check_reaction(); //yongfeng
         if (ballistic_flag) check_ballistic(time); //yongfeng
         if (frenkelpair_flag) check_frenkelpair(time); //yongfeng
         if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
         if (diffusionflag) onsager(time); //yongfeng
         if (saltdiffusion_flag) check_saltdiffusion(time); //LC
-
+        //LC timing
+        saltdiff_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
+        time_check = high_resolution_clock::now();
         //if (ballistic_flag) sia_concentration(dt_step); // yongfeng
 	timer->stamp(TIME_APP);
       } else {
@@ -539,9 +568,20 @@ void AppLattice::iterate_kmc_global(double stoptime)
 
     if (clst_flag && (done || time >= nextoutput)) cluster();
     if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration
+
+    //LC test
+    if (done || time >= nextoutput) dump_event(dt_step); // LC test
     if (done || time >= nextoutput) nextoutput = output->compute(time,done);
+
     timer->stamp(TIME_OUTPUT);
   }
+  //LC timing
+    end = high_resolution_clock::now();
+    duration_sec = std::chrono::duration_cast<duration<double, std::milli>>(end - start);
+  fprintf(screen,"whole timing:%e\n", duration_sec/1000); //unit: CPU sec
+  fprintf(screen,"border timing:%e, percentage: %f \n", border_time/1000, (border_time/1000)/(duration_sec/1000)); //unit: CPU sec
+  fprintf(screen,"site timing:%e, percentage: %f \n", site_time/1000, (site_time/1000)/(duration_sec/1000)); //unit: CPU sec
+  fprintf(screen,"saltdiff timing:%e, percentage: %f\n", saltdiff_time/1000, (saltdiff_time/1000)/(duration_sec/1000)); //unit: CPU sec
 
   // restore system solver
 
@@ -559,6 +599,16 @@ void AppLattice::iterate_kmc_sector(double stoptime)
   double dt,timesector;
   double pmax,pmaxall;
 
+//LC timing setting
+  high_resolution_clock::time_point start;
+  high_resolution_clock::time_point time_check;
+  high_resolution_clock::time_point end;
+  duration<double, std::milli> duration_sec;
+  duration<double, std::milli> border_time;
+  duration<double, std::milli> site_time;
+  duration<double, std::milli> saltdiff_time;
+  start = high_resolution_clock::now();
+  time_check = high_resolution_clock::now();
   // save ptr to system solver
 
   Solve *hold_solve = solve;
@@ -566,6 +616,34 @@ void AppLattice::iterate_kmc_sector(double stoptime)
   int alldone = 0;
   while (!alldone) {
     if (Ladapt) pmax = 0.0;
+
+    // LC test
+    //fprintf(screen,"dt_kmc:%f\n", dt_kmc);
+
+    // dump event_list per sector
+    //dump_event(dt_kmc); // flag set in dump_event itself
+
+    // LC test
+  //   fprintf(screen,"pmaxall:%e\n", pmaxall);
+  //   fprintf(screen,"dt_kmc:%f\n", dt_kmc);
+  //   double sum_propensity = 0;
+  //   for (int i = 0; i < nset; i++) {
+  //     fprintf(screen,"iset:%d\n",i);
+  //     //fprintf(screen,"set[i].propensity:%e\n",set[i].propensity);
+  //
+  //     for (int m = 0; m < set[i].nlocal; m++){
+  // ///set[i].propensity[m] = site_propensity(set[i].site2i[m]);
+  // if(set[i].propensity[m]!=0){
+  // //fprintf(screen,"propensity:%e\n",set[i].propensity[m]);
+  // sum_propensity = sum_propensity + set[i].propensity[m];
+  //           }
+  //
+  //       }
+  //       fprintf(screen,"sum_propensity[%d]:%e\n",i, sum_propensity);
+  //   }
+
+  //LC test
+  //dump_event(dt_kmc);
 
     for (int iset = 0; iset < nset; iset++) { //LC note:  nset == nsector == "4" from sector setting
       timer->stamp();
@@ -597,11 +675,15 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 	propensity[isite] = site_propensity(i);
       }
 
+
+
        solve->update(nsites,bsites,propensity);
        timer->stamp(TIME_COMM);
+//LC test
+//dump_event(dt_kmc);
 
       // pmax = maximum sector propensity per site
-
+//LC note: plan to compute pmax by new method to decrease pmax by remove unwanted event propensity
       if (Ladapt) {
 	int ntmp = solve->get_num_active();
 	if (ntmp > 0) {
@@ -610,15 +692,21 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 	  pmax = MAX(ptmp,pmax);
 	}
       }
-      // execute events until sector time threshhold reached
+      // LC test
+      //fprintf(screen,"pmax:%e\n", pmax);
 
+      //LC timing
+      border_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
+      time_check = high_resolution_clock::now();
+
+      // execute events until sector time threshhold reached
       done = 0;
       timesector = 0.0;
       while (!done) { // LC note: iterate in 1 sector region
 	timer->stamp();
 	isite = solve->event(&dt); //LC note: compute to get dt of 1 event on isite
-
 	timer->stamp(TIME_SOLVE);
+
 
         if(ballistic_flag && dt > min_bfreq) dt = min_bfreq;  // the timestep can not exceed ballstic frequency if the flag is on
         if(frenkelpair_flag && dt > min_bfreq) dt = min_fpfreq;  // the timestep can not exceed ballstic frequency if the flag is on
@@ -627,9 +715,10 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 	  timesector += dt;
 	  if (timesector >= dt_kmc) done = 1;
 	  else {
-            if(time_flag) time_tracer(dt); //yongfeng, pass dt to app_rpv
+      if(time_flag) time_tracer(dt); //yongfeng, pass dt to app_rpv
 	    site_event(site2i[isite],ranapp);
 	    naccept++; // LC note: actuall number of event
+
 
       if (concentrationflag) concentration_field(dt); //yongfeng, LC --edited, this function should be located after site_event
 	  }
@@ -637,7 +726,9 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 	}
 
       }
-
+      //LC timing
+      site_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
+      time_check = high_resolution_clock::now();
 
       if (nprocs > 1) {  // LC note: not used nprocs ==1
 	comm->reverse_sector(iset);
@@ -671,6 +762,8 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (alldone || time >= nextoutput) {
        if(clst_flag) cluster(); //yongfeng
        if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration, LC
+       //LC test
+       dump_event(dt_kmc); // output event list per dump
        nextoutput = output->compute(time,alldone); //LC note: here stats and dump --> compute function in output.cpp
         }
     timer->stamp(TIME_OUTPUT);
@@ -682,8 +775,23 @@ void AppLattice::iterate_kmc_sector(double stoptime)
       if (pmaxall > 0.0) dt_kmc = nstop/pmaxall;
       else dt_kmc = stoptime-time;
       dt_kmc = MIN(dt_kmc,stoptime-time);
+
+      // LC test
+      //fprintf(screen,"pmax:%e\n", pmax);
+      //fprintf(screen,"dt_kmc:%f\n", dt_kmc);
     }
+    //LC timing
+    saltdiff_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
+    time_check = high_resolution_clock::now();
   }
+
+//LC timing
+  end = high_resolution_clock::now();
+  duration_sec = std::chrono::duration_cast<duration<double, std::milli>>(end - start);
+fprintf(screen,"whole timing:%e\n", duration_sec/1000); //unit: CPU sec // total time
+fprintf(screen,"border timing:%e, percentage: %f \n", border_time/1000, (border_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for pre-site
+fprintf(screen,"site timing:%e, percentage: %f \n", site_time/1000, (site_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for site
+fprintf(screen,"saltdiff timing:%e, percentage: %f\n", saltdiff_time/1000, (saltdiff_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for after-site
 
   // restore system solver
 
@@ -849,7 +957,7 @@ void AppLattice::input_app(char *command, int narg, char **arg)
 }
 
 /* ---------------------------------------------------------------------- */
-//LC note: this func setting up sector 
+//LC note: this func setting up sector
 void AppLattice::set_sector(int narg, char **arg)
 {
   if (narg < 1) error->all(FLERR,"Illegal sector command");
@@ -1273,12 +1381,13 @@ void AppLattice::grow(int n)
 
   memory->grow(numneigh,nmax,"app:numneigh");
   if (maxneigh) memory->grow(neighbor,nmax,maxneigh,"app:neighbor");
-
+//fprintf(screen, "test from grow\n"); // LC test
   for (int i = 0; i < ninteger; i++)
     memory->grow(iarray[i],nmax,"app:iarray");
   for (int i = 0; i < ndouble; i++)
     memory->grow(darray[i],nmax,"app:darray");
   grow_app();
+  //fprintf(screen, "ninteger:%d, nmax:%d\n", ninteger, nmax); // LC test
 }
 
 /* ----------------------------------------------------------------------
@@ -1351,8 +1460,11 @@ void AppLattice::add_neighbors(int i, int nvalues, char **values)
 
 void AppLattice::add_values(int i, char **values)
 {
+  //fprintf(screen, "test from add_value\n"); // LC test
   for (int m = 0; m < ninteger; m++) iarray[m][i] = atoi(values[m]);
+  //fprintf(screen, "test from add_value\n"); // LC test
   for (int m = 0; m < ndouble; m++) darray[m][i] = atof(values[m+ninteger]);
+  //fprintf(screen, "test from add_value\n"); // LC test
 }
 
 /* ----------------------------------------------------------------------

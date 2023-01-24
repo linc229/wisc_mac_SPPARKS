@@ -36,6 +36,7 @@ enum{react=61, surffe, surfcu, bulkfe, bulkcu, nsalt, nsaltdiff};     // number 
 enum{dFE=71,dVACANCY,dCU,dNI,dMN,dSi,dP,dC,dSIA}; // MSD for each element !! >dFE is floater
 enum{energy=81,treal,fvt, metal_energy};                        // energy and realistic time
 enum{cVAC=91,cFE,cVACANCY,cCU, cCE4, cCE5, cCE6, cCE7, cCE8}; 	// time averaged concentration
+enum{msdFE=101,msdVACANCY,msdCU};  // MSD calculation by LC
 //!! be careful for the integer and float at line 164 when adding new variables
 /* ---------------------------------------------------------------------- */
 
@@ -136,6 +137,11 @@ void Diagcoros::init()
     else if (strcmp(list[i],"dp") == 0) which[i] = dP;
     else if (strcmp(list[i],"dc") == 0) which[i] = dC;
     else if (strcmp(list[i],"dsia") == 0) which[i] = dSIA;
+
+    //LC MSD calculation
+    else if (strcmp(list[i],"msdfe") == 0) which[i] = msdFE; //MSD
+    else if (strcmp(list[i],"msdvac") == 0) which[i] = msdVACANCY;
+    else if (strcmp(list[i],"msdcu") == 0) which[i] = msdCU;
 /*
     else if (strcmp(list[i],"mfe") == 0) which[i] = mFE;//MSD
     else if (strcmp(list[i],"mvac") == 0) which[i] = mVACANCY;
@@ -205,6 +211,7 @@ void Diagcoros::compute()
   double *csites;
   int *monosites;
   double msd[10] ;
+  double *sd; // for store sd array
 
 
   ninter = nfloater = 0;
@@ -262,7 +269,7 @@ void Diagcoros::compute()
     // else if (which[i] == cCE7) ivalue = csites[CE7];
     // else if (which[i] == cCE8) ivalue = csites[CE8];
 
-    // count monomer for each particle from i2
+    // count monomer for each particle from i2 by LC
     else if (which[i] == monoFE){
       appcoros-> monomer_count(); // compute monomer_count to update monomers // must have monoFe if want to count monomer
       monosites = appcoros ->monomers; // monomers array to contain monomer for each particles
@@ -298,6 +305,15 @@ void Diagcoros::compute()
     else if (which[i] == dP && sites[P] > 0) dvalue = msd[P]/sites[P];
     else if (which[i] == dC && sites[C] > 0) dvalue = msd[C]/sites[C];
     else if (which[i] == dSIA && sites[SIA] > 0) dvalue = msd[SIA]/sites[SIA];
+
+    // MSD calculation by LC
+    else if (which[i] == msdFE){
+      appcoros-> MSD_calculation(); // compute monomer_count to update monomers // must have monoFe if want to count monomer
+      sd = appcoros ->sd; // monomers array to contain monomer for each particles
+      dvalue = sd[FE]/sites[FE]; //count vac monomer
+    }
+    else if (which[i] == msdVACANCY) dvalue = sd[VACANCY]/sites[VACANCY];
+    else if (which[i] == msdCU) dvalue = sd[CU]/sites[CU];
 
     // this section is to count the number of each events by LC
     else if (which[i] == react) ivalue = appcoros->nreact; //total reaction event
