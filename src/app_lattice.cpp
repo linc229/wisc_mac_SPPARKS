@@ -92,8 +92,9 @@ AppLattice::AppLattice(SPPARKS *spk, int narg, char **arg) : App(spk,narg,arg)
   app_update_only = 0;
   reaction_flag = ballistic_flag = frenkelpair_flag = time_flag = sinkmotion_flag = clst_flag = concentrationflag = 0; //yongfeng
   saltdiffusion_flag = 0; //LC
-  //dump_event_flag = 1; // LC
-  KMC_stop_flag = 1; //LC
+  time_check_flag = 0; //LC
+  dump_event_flag = 0; // LC
+  KMC_stop_flag = 0; //LC
 }
 
 /* ---------------------------------------------------------------------- */
@@ -327,6 +328,8 @@ void AppLattice::init()
   if (sweepflag && dt_sweep == 0.0)
     error->all(FLERR,"App did not set dt_sweep");
 
+
+
   // initialize output
 
   output->init(time);
@@ -450,6 +453,9 @@ void AppLattice::setup()
 
   nextoutput = output->setup(time,first_run);
 
+
+ if(dump_event_flag){dump_event(dt_kmc); }// output event list as init
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -486,6 +492,7 @@ void AppLattice::iterate_kmc_global(double stoptime)
   int isite = -1;
 
   //LC timing setting
+
     high_resolution_clock::time_point start;
     high_resolution_clock::time_point time_check;
     high_resolution_clock::time_point end;
@@ -493,8 +500,11 @@ void AppLattice::iterate_kmc_global(double stoptime)
     duration<double, std::milli> border_time;
     duration<double, std::milli> site_time;
     duration<double, std::milli> saltdiff_time;
+
+    if(time_check_flag){
     start = high_resolution_clock::now();
     time_check = high_resolution_clock::now();
+    }
 
   // global KMC runs with one set
   // save ptr to system solver
@@ -525,16 +535,21 @@ void AppLattice::iterate_kmc_global(double stoptime)
       }
 
       //LC timing
+      if(time_check_flag){
       border_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
       time_check = high_resolution_clock::now();
+    }
 
       if (time <= stoptime) {
 	site_event(isite,ranapp);
 	naccept++;
 
   //LC timing
+  if(time_check_flag){
   site_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
   time_check = high_resolution_clock::now();
+}
+
         if (reaction_flag) check_reaction(); //yongfeng
         if (ballistic_flag) check_ballistic(time); //yongfeng
         if (frenkelpair_flag) check_frenkelpair(time); //yongfeng
@@ -542,8 +557,10 @@ void AppLattice::iterate_kmc_global(double stoptime)
         if (diffusionflag) onsager(time); //yongfeng
         if (saltdiffusion_flag) check_saltdiffusion(time); //LC
         //LC timing
+        if(time_check_flag){
         saltdiff_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
         time_check = high_resolution_clock::now();
+      }
         //if (ballistic_flag) sia_concentration(dt_step); // yongfeng
 	timer->stamp(TIME_APP);
       } else {
@@ -569,20 +586,23 @@ void AppLattice::iterate_kmc_global(double stoptime)
     if (clst_flag && (done || time >= nextoutput)) cluster();
     if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration
 
-    //LC test
-    if (done || time >= nextoutput) dump_event(dt_step); // LC test
+    //LC dump_event list
+    if(dump_event_flag){
+        if (done || time >= nextoutput) dump_event(dt_step);
+        }
     if (done || time >= nextoutput) nextoutput = output->compute(time,done);
 
     timer->stamp(TIME_OUTPUT);
   }
   //LC timing
+  if(time_check_flag){
     end = high_resolution_clock::now();
     duration_sec = std::chrono::duration_cast<duration<double, std::milli>>(end - start);
   fprintf(screen,"whole timing:%e\n", duration_sec/1000); //unit: CPU sec
   fprintf(screen,"border timing:%e, percentage: %f \n", border_time/1000, (border_time/1000)/(duration_sec/1000)); //unit: CPU sec
   fprintf(screen,"site timing:%e, percentage: %f \n", site_time/1000, (site_time/1000)/(duration_sec/1000)); //unit: CPU sec
   fprintf(screen,"saltdiff timing:%e, percentage: %f\n", saltdiff_time/1000, (saltdiff_time/1000)/(duration_sec/1000)); //unit: CPU sec
-
+}
   // restore system solver
 
   solve = hold_solve;
@@ -600,6 +620,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
   double pmax,pmaxall;
 
 //LC timing setting
+
   high_resolution_clock::time_point start;
   high_resolution_clock::time_point time_check;
   high_resolution_clock::time_point end;
@@ -607,8 +628,10 @@ void AppLattice::iterate_kmc_sector(double stoptime)
   duration<double, std::milli> border_time;
   duration<double, std::milli> site_time;
   duration<double, std::milli> saltdiff_time;
+  if(time_check_flag){
   start = high_resolution_clock::now();
   time_check = high_resolution_clock::now();
+}
   // save ptr to system solver
 
   Solve *hold_solve = solve;
@@ -641,9 +664,6 @@ void AppLattice::iterate_kmc_sector(double stoptime)
   //       }
   //       fprintf(screen,"sum_propensity[%d]:%e\n",i, sum_propensity);
   //   }
-
-  //LC test
-  //dump_event(dt_kmc);
 
     for (int iset = 0; iset < nset; iset++) { //LC note:  nset == nsector == "4" from sector setting
       timer->stamp();
@@ -679,8 +699,6 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 
        solve->update(nsites,bsites,propensity);
        timer->stamp(TIME_COMM);
-//LC test
-//dump_event(dt_kmc);
 
       // pmax = maximum sector propensity per site
 //LC note: plan to compute pmax by new method to decrease pmax by remove unwanted event propensity
@@ -696,8 +714,10 @@ void AppLattice::iterate_kmc_sector(double stoptime)
       //fprintf(screen,"pmax:%e\n", pmax);
 
       //LC timing
+      if(time_check_flag){
       border_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
       time_check = high_resolution_clock::now();
+    }
 
       // execute events until sector time threshhold reached
       done = 0;
@@ -727,8 +747,10 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 
       }
       //LC timing
+      if(time_check_flag){
       site_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
       time_check = high_resolution_clock::now();
+    }
 
       if (nprocs > 1) {  // LC note: not used nprocs ==1
 	comm->reverse_sector(iset);
@@ -753,6 +775,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 
     //if (ballistic_flag) sia_concentration(dt_kmc); // yongfeng
     if (saltdiffusion_flag) check_saltdiffusion(time);// LC
+
     if (KMC_stop_flag) {  //LC KMC_stop, if reach Cr_num_threshold
       int check_point = KMC_stop();
       if (check_point == 1){alldone = 1;}
@@ -763,7 +786,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
        if(clst_flag) cluster(); //yongfeng
        if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration, LC
        //LC test
-       dump_event(dt_kmc); // output event list per dump
+       if(dump_event_flag){dump_event(dt_kmc); }// output event list per dump
        nextoutput = output->compute(time,alldone); //LC note: here stats and dump --> compute function in output.cpp
         }
     timer->stamp(TIME_OUTPUT);
@@ -781,21 +804,27 @@ void AppLattice::iterate_kmc_sector(double stoptime)
       //fprintf(screen,"dt_kmc:%f\n", dt_kmc);
     }
     //LC timing
+    if(time_check_flag){
     saltdiff_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
     time_check = high_resolution_clock::now();
+    }
+
   }
 
-//LC timing
-  end = high_resolution_clock::now();
-  duration_sec = std::chrono::duration_cast<duration<double, std::milli>>(end - start);
-fprintf(screen,"whole timing:%e\n", duration_sec/1000); //unit: CPU sec // total time
-fprintf(screen,"border timing:%e, percentage: %f \n", border_time/1000, (border_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for pre-site
-fprintf(screen,"site timing:%e, percentage: %f \n", site_time/1000, (site_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for site
-fprintf(screen,"saltdiff timing:%e, percentage: %f\n", saltdiff_time/1000, (saltdiff_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for after-site
 
   // restore system solver
 
   solve = hold_solve;
+
+  //LC timing
+  if(time_check_flag){
+    end = high_resolution_clock::now();
+    duration_sec = std::chrono::duration_cast<duration<double, std::milli>>(end - start);
+  fprintf(screen,"whole timing:%e\n", duration_sec/1000); //unit: CPU sec // total time
+  fprintf(screen,"border timing:%e, percentage: %f \n", border_time/1000, (border_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for pre-site
+  fprintf(screen,"site timing:%e, percentage: %f \n", site_time/1000, (site_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for site
+  fprintf(screen,"saltdiff timing:%e, percentage: %f\n", saltdiff_time/1000, (saltdiff_time/1000)/(duration_sec/1000)); //unit: CPU sec // time for after-site
+  }
 }
 
 /* ----------------------------------------------------------------------

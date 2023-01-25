@@ -120,7 +120,8 @@ class AppLattice : public App {
   int diffusionflag;           // 1 if calculate the onsager coefficient
   int saltdiffusion_flag;      // by LC 1 if app supports ballistic mixing
   int KMC_stop_flag;           // by LC
-  //int dump_event_flag;         // by LC for dump_event function
+  int dump_event_flag;         // by LC for dump_event function
+  int time_check_flag;         // by LC for check time on separate function call
 
   int sweepflag;               // set if rejection KMC solver
   int sectorflag;              // 1 if partition my domain into sectors

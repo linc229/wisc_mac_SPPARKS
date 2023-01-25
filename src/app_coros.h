@@ -124,7 +124,7 @@ class Appcoros : public AppLattice {
   int extract_flag;
   int evap_extract_flag;
   int np_extract_flag;
-  int coros_stop_flag;
+  //int coros_stop_flag;
   int threshold_Cr;
   int large_propensity_extract_flag;
 
@@ -144,7 +144,7 @@ class Appcoros : public AppLattice {
     //int ct_site_flag;
     double **i3_site, **i3_site_new, dt_i3_site_new;
   // parameter for dump_event func by LC
-  int dump_event_flag;
+  //int dump_event_flag;
   int dump_index;
   int dump_event_all_flag;
   int dump_event_all_file;

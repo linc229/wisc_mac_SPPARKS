@@ -65,7 +65,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
 
   // darray 1-4 for msd if activated, followed by concentrations
   if (diffusionflag == 1) {
-    ninteger++; 
+    ninteger++;
     ndouble += 4;
   }
   // calculate concentration fiels for certain elements
@@ -144,7 +144,6 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   extract_flag = 0;
   evap_extract_flag = 0;
   np_extract_flag = 0;
-  coros_stop_flag = 0;
   //ct_reset_flag = 0;
   //ct_site_flag = 0;
   large_propensity_extract_flag = 0;
@@ -492,21 +491,25 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     if(narg != 1) error->all(FLERR,"illegal large_propensity_extract command");
     large_propensity_extract_flag = atoi(arg[0]); // large_propensity_extract is on/enable if = 1, disable for other value
   }
+
   else if (strcmp(command, "dump_event") ==0) {
     if(narg != 1) error->all(FLERR,"illegal dump_event command");
-    dump_event_flag = atoi(arg[0]); // dump_event_flag is on/enable if = 1, disable for other value
+    if (atoi(arg[0])==1){
+      dump_event_flag = 1; //on/enable if = 1, disable for other value
+    }
   }
+
   else if (strcmp(command, "dump_event_all") ==0) {
     if(narg != 1) error->all(FLERR,"illegal dump_event_all command");
     dump_event_all_flag = atoi(arg[0]); // dump_event_flag is on/enable if = 1, disable for other value
   }
+
   // stop function based on number of corrosion event
   else if (strcmp(command, "coros_stop") ==0) {
 
     if(narg != 1) error->all(FLERR,"illegal coros_stop command");
-    //if(diffusionflag) error->warning(FLERR,"MSD calculated with reactions");
     threshold_Cr = atoi(arg[0]);
-    coros_stop_flag = 1;
+    KMC_stop_flag = 1;
 
   }
 
@@ -516,6 +519,14 @@ else if (strcmp(command, "surfaceeffect") ==0) {
   if(narg != 1) error->all(FLERR,"illegal surfaceeffect command");
   surface_effect_b = atoi(arg[0]);
 }
+    // feature for timming each functioncall
+  else if (strcmp(command, "time_check") ==0) {
+    if(narg != 1) error->all(FLERR,"illegal time_check command");
+    if (atoi(arg[0])==1){
+      time_check_flag = 1;
+    }
+
+  }
 
 /*
   else if (strcmp(command, "ballistic") ==0) {
@@ -3311,7 +3322,7 @@ double Appcoros::total_metal_energy( )
   first set 50%
 ------------------------------------------------------------------------- */
 int Appcoros::KMC_stop(){
-  if (coros_stop_flag == 0) return 0;
+  if (KMC_stop_flag==0) return 0;
   double Cr_num_threshold = threshold_Cr * 0.01 * total_Cr;
 
   double j = (float) nreact;
@@ -3495,11 +3506,6 @@ for(int i = 0; i < 2; i++) {
 }
 dt_i3_site_new = 0;
 
-// call dump_event if the flag is on
-  //if(dump_event_flag == 1) dump_event();
-  //
-
-
 return i3_site;
 }
 
@@ -3550,7 +3556,7 @@ dump for every sector loop
 ------------------------------------------------------------------------- */
 void Appcoros::dump_event(double dt_kmc)
 {
-  if(dump_event_flag != 1) return;
+  //if(dump_event_flag != 1) return;
 
   char temp[10];
   string dumpfilename = ".dump_eventlist";
