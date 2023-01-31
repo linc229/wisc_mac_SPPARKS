@@ -270,7 +270,7 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     memory->create(ct_site_new,nelement+1,nlocal,"app/coros:ct_site_new");  //LC
     memory->create(i3_site,5,nlocal,"app/coros:i3_site"); // LC
     memory->create(i3_site_new,5,nlocal,"app/coros:i3_site_new"); // LC
-    hcount = new int [nelement+1]; // total numner of switching with a vacancy;
+    hcount = new bigint [nelement+1]; // total numner of switching with a vacancy;
 
     if(narg != nelement*(nelement+1)/2+1) error->all(FLERR,"Illegal ebond command");
     nn1flag = 1;
@@ -3202,13 +3202,13 @@ int sum = 0;
 void Appcoros::check_saltdiffusion(double t)
 {
 
-  int nmix = 0;
+  bigint nmix = 0;
   int nsalt = 0;
   for(int i = 0; i < nsaltdiffusion; i ++) {
     if(t/salt_bfreq[i] < 1){  fprintf(screen,"warning:t=%f t/salt_bfreq<1 \n", t);}
     if(t/salt_bfreq[i] < 1){break;}
 
-     salt_time_new[i] = static_cast<int>(t/salt_bfreq[i]); // salt_bfreq = 100 as default
+     salt_time_new[i] = static_cast<bigint>(t/salt_bfreq[i]); // salt_bfreq = 100 as default
      nmix = salt_time_new[i] - salt_time_old[i];
 
      nsalt = count_salt(); // count salt in lattice

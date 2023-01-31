@@ -37,6 +37,7 @@ enum{dFE=71,dVACANCY,dCU,dNI,dMN,dSi,dP,dC,dSIA}; // MSD for each element !! >dF
 enum{energy=81,treal,fvt, metal_energy};                        // energy and realistic time
 enum{cVAC=91,cFE,cVACANCY,cCU, cCE4, cCE5, cCE6, cCE7, cCE8}; 	// time averaged concentration
 enum{msdFE=101,msdVACANCY,msdCU};  // MSD calculation by LC
+enum{dFEx=111,dFEy, dFEz,dVACANCYx,dVACANCYy,dVACANCYz,dCUx,dCUy,dCUz};  // MSD calculation by LC
 //!! be careful for the integer and float at line 164 when adding new variables
 /* ---------------------------------------------------------------------- */
 
@@ -138,6 +139,18 @@ void Diagcoros::init()
     else if (strcmp(list[i],"dc") == 0) which[i] = dC;
     else if (strcmp(list[i],"dsia") == 0) which[i] = dSIA;
 
+    //LC MSD calculation for each direction
+    else if (strcmp(list[i],"dfex") == 0) which[i] = dFEx;
+    else if (strcmp(list[i],"dfey") == 0) which[i] = dFEy;
+    else if (strcmp(list[i],"dfez") == 0) which[i] = dFEz;
+    else if (strcmp(list[i],"dvacx") == 0) which[i] = dVACANCYx;
+    else if (strcmp(list[i],"dvacy") == 0) which[i] = dVACANCYy;
+    else if (strcmp(list[i],"dvacz") == 0) which[i] = dVACANCYz;
+    else if (strcmp(list[i],"dcux") == 0) which[i] = dCUx;
+    else if (strcmp(list[i],"dcuy") == 0) which[i] = dCUy;
+    else if (strcmp(list[i],"dcuz") == 0) which[i] = dCUz;
+
+
     //LC MSD calculation
     else if (strcmp(list[i],"msdfe") == 0) which[i] = msdFE; //MSD
     else if (strcmp(list[i],"msdvac") == 0) which[i] = msdVACANCY;
@@ -203,14 +216,16 @@ void Diagcoros::init()
 void Diagcoros::compute()
 {
   int ninter,nfloater;
-  int sites[10],nhop[10],ivalue; // int data
+  int sites[10],ivalue; // int data
+  bigint nhop[10]; // big int for nhop
   int kvalue; // for number of event
   int nlocal = appcoros->nlocal;
   int nelement = appcoros->nelement;
   double dvalue ; // double data
   double *csites;
   int *monosites;
-  double msd[10] ;
+  double msd[10];
+  double dir_msd[9]; // LC total MSD per direction
   double *sd; // for store sd array
 
 
@@ -244,10 +259,23 @@ void Diagcoros::compute()
       for (int i = 0; i < nlocal; i++) sites[element[i]]++;
     }
 
+    // reset for dir_msd
+    for (int i=0;i<9;i++){
+      dir_msd[i] = 0.0;
+    }
+
     for(int i = 0; i < nlocal; i++) {
        msd[element[i]] += appcoros->disp[3][i];
+
+    // LC MSD calculation per direction
+    //for(int i = 0; i < nlocal; i++) {
+       dir_msd[3*(element[i]-1)] += appcoros->disp[0][i] * appcoros->disp[0][i];
+       dir_msd[3*(element[i]-1)+1] += appcoros->disp[1][i] * appcoros->disp[1][i];
+       dir_msd[3*(element[i]-1)+2] += appcoros->disp[2][i] * appcoros->disp[2][i];
+    //}
     }
   }
+
   for (int i = 0; i < nlist; i++) {
     if (which[i] == FE) ivalue = sites[FE]; //total sites
     else if (which[i] == VACANCY) ivalue = sites[VACANCY];
@@ -305,6 +333,17 @@ void Diagcoros::compute()
     else if (which[i] == dP && sites[P] > 0) dvalue = msd[P]/sites[P];
     else if (which[i] == dC && sites[C] > 0) dvalue = msd[C]/sites[C];
     else if (which[i] == dSIA && sites[SIA] > 0) dvalue = msd[SIA]/sites[SIA];
+
+    //LC total MSD calculation for each direction
+    else if (which[i] == dFEx ) dvalue = dir_msd[0]/sites[FE];//MSD
+    else if (which[i] == dFEy ) dvalue = dir_msd[1]/sites[FE];
+    else if (which[i] == dFEz ) dvalue = dir_msd[2]/sites[FE];
+    else if (which[i] == dVACANCYx ) dvalue = dir_msd[3]/sites[VACANCY];
+    else if (which[i] == dVACANCYy ) dvalue = dir_msd[4]/sites[VACANCY];
+    else if (which[i] == dVACANCYz ) dvalue = dir_msd[5]/sites[VACANCY];
+    else if (which[i] == dCUx ) dvalue = dir_msd[6]/sites[CU];
+    else if (which[i] == dCUy ) dvalue = dir_msd[7]/sites[CU];
+    else if (which[i] == dCUz ) dvalue = dir_msd[8]/sites[CU];
 
     // MSD calculation by LC
     else if (which[i] == msdFE){

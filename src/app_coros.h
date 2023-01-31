@@ -59,7 +59,7 @@ class Appcoros : public AppLattice {
   double **disp; //atomic displacement
   double *mbarrier; //migration barriers
   //double *surfbarrier; //migration barrier for surface diffusion by LC comment 0704
-  int *hcount;
+  bigint *hcount;  // LC change to big int
   double *attemptfrequency; // attempt freqency for all diffusion by LC
 
   int nreact; // number of reaction events by LC
@@ -108,9 +108,9 @@ class Appcoros : public AppLattice {
 //parameter for salt potential by LC
   int nsaltdiffusion; // LC
   int *potential; //atomic displacement
-  int *salt_time_old,*salt_time_new;
+  bigint *salt_time_old,*salt_time_new;
   double *salt_bfreq;
-  int num_saltdiffusion ; // number of salt diffusion motion
+  bigint num_saltdiffusion ; // number of salt diffusion motion
 
 //parameter for acceleration
   int ntrap;
