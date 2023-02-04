@@ -450,6 +450,12 @@ int DumpText::parse_fields(int narg, char **arg)
     }else if (strcmp(arg[iarg],"i3_1") == 0) { // i3_site_1 by LC
         pack_choice[i] = &DumpText::pack_i3_site_1;
         vtype[i] = DOUBLE;
+    }else if (strcmp(arg[iarg],"temp_t") == 0) { // temp_t by LC
+        pack_choice[i] = &DumpText::pack_temp_t;
+        vtype[i] = DOUBLE;
+    }else if (strcmp(arg[iarg],"temp_i2") == 0) { // temp_i2 by LC
+        pack_choice[i] = &DumpText::pack_temp_i2;
+        vtype[i] = DOUBLE;
 
     // integer value = iN
     // double value = dN
@@ -731,6 +737,24 @@ void DumpText::pack_i3_site_1(int n)
 {
   for (int i = 0; i < nchoose; i++) {
     buf[n] = i3_site[1][clist[i]];
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_temp_t(int n)
+{
+  t_site = applattice->temp_t_extract();
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = t_site[clist[i]];
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_temp_i2(int n)
+{
+  i2_site = applattice->temp_i2_extract();
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = i2_site[clist[i]];
     n += size_one;
   }
 }

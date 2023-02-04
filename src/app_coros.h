@@ -140,6 +140,11 @@ class Appcoros : public AppLattice {
 
   //parameter for time averaged concentration
     double **ct_site, **ct_site_new, *ct,*ct_new,dt_new, dt_site_c_new;
+    double *ct_site_temp_t;  //LC for stoing time point
+    int *ct_site_temp_i2;    //LC for storing i2 at previous time point
+    int cur_i;       // global var for storing position of i and j
+    int cur_j;
+    double site_time_interval; //LC
     //int ct_reset_flag;
     //int ct_site_flag;
     double **i3_site, **i3_site_new, dt_i3_site_new;
@@ -230,8 +235,9 @@ class Appcoros : public AppLattice {
   double total_metal_energy(); // by LC
   int KMC_stop(); //by LC
   int vac_monomer_count(); //by LC
-  void concentration_field(double); //calculation concentration field
-  void time_averaged_concentration(); // calculate time-averaged concentration
+  void concentration_field(double, double); //calculation concentration field
+  void time_averaged_concentration(double); // calculate time-averaged concentration
+  void site_concentration_calc();     // by LC
   void monomer_count();
   //void ct_reset(); // reset time-average concentration after diag call
   double **ct_site_extract(); // return ct_site **array called by app_lattice <-- dump_text
@@ -240,6 +246,9 @@ class Appcoros : public AppLattice {
   void dump_event(double); // LC, dump event list per dump time as text file
   void dump_event_all(int, int, int, int, double); // LC dump all event list to one file
   void MSD_calculation(); //by LC, compute MSD when atom change
+  double *temp_t_extract(); // by LC
+  int *temp_i2_extract();   // by LC
+
 };
 
 }

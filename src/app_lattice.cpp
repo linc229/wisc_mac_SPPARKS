@@ -527,8 +527,8 @@ void AppLattice::iterate_kmc_global(double stoptime)
     if(frenkelpair_flag && dt_step > min_fpfreq) dt_step = min_fpfreq; //Yongfeng, double check later!!!
     if (isite >= 0) {
       time += dt_step;
-
-      if (concentrationflag) concentration_field(dt_step); //yongfeng, integrate concentration every step
+      //LC comment temp
+      //if (concentrationflag) concentration_field(dt_step); //yongfeng, integrate concentration every step
       if (time_flag) { //yongfeng
          time_tracer(dt_step);
          realtime += dt_step*real_time(time);
@@ -584,7 +584,7 @@ void AppLattice::iterate_kmc_global(double stoptime)
     }
 
     if (clst_flag && (done || time >= nextoutput)) cluster();
-    if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration
+    if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(time); // calculate time averaged concentration
 
     //LC dump_event list
     if(dump_event_flag){
@@ -740,12 +740,15 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 	    naccept++; // LC note: actuall number of event
 
 
-      if (concentrationflag) concentration_field(dt); //yongfeng, LC --edited, this function should be located after site_event
+      if (concentrationflag) concentration_field(dt, timesector); //yongfeng, LC --edited, this function should be located after site_event
 	  }
 	  timer->stamp(TIME_APP);
 	}
 
       }
+
+      if(concentrationflag) site_concentration_calc(); // LC update
+
       //LC timing
       if(time_check_flag){
       site_time += std::chrono::duration_cast<duration<double, std::milli>>(high_resolution_clock::now() - time_check);
@@ -764,6 +767,8 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 
     nsweeps++; // LC note: number of sectoring
     time += dt_kmc;
+
+
     if (time_flag)
       realtime += dt_kmc / nprocs * real_time(time);
 
@@ -784,7 +789,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (time >= stoptime) alldone = 1;
     if (alldone || time >= nextoutput) {
        if(clst_flag) cluster(); //yongfeng
-       if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration, LC
+       if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(time); // calculate time averaged concentration, LC
        //LC test
        if(dump_event_flag){dump_event(dt_kmc); }// output event list per dump
        nextoutput = output->compute(time,alldone); //LC note: here stats and dump --> compute function in output.cpp

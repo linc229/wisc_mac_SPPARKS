@@ -52,8 +52,10 @@ class DumpText : public Dump {
   int *choose;               // lists of sites chosen for output
   double *dchoose;           // value for each atom to threshhold against
   int *clist;                // compressed list of indices of selected atoms
-  double **ct_site;          // LC, site concentration for i2 
+  double **ct_site;          // LC, site concentration for i2
   double **i3_site;          // LC, site concentration for i3 ==0,1
+  double *t_site;            // LC
+  int *i2_site;              // LC
 
   // private methods
 
@@ -93,6 +95,9 @@ class DumpText : public Dump {
   void pack_ct_site_Cr(int);
   void pack_i3_site_0(int);
   void pack_i3_site_1(int);
+  void pack_temp_t(int);
+  void pack_temp_i2(int);
+
 };
 
 }

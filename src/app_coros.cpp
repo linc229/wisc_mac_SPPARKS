@@ -268,7 +268,12 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     //if(concentrationflag) memory->create(ct_site,nelement,nlocal,"app/coros:ct_site"); //site coefficient
     memory->create(ct_site,nelement+1,nlocal,"app/coros:ct_site"); //LC
     memory->create(ct_site_new,nelement+1,nlocal,"app/coros:ct_site_new");  //LC
+
+    memory->create(ct_site_temp_t,nlocal,"app/coros:ct_site_temp_t");  //LC
+    memory->create(ct_site_temp_i2,nlocal,"app/coros:ct_site_temp_i2");  //LC
+
     memory->create(i3_site,5,nlocal,"app/coros:i3_site"); // LC
+
     memory->create(i3_site_new,5,nlocal,"app/coros:i3_site_new"); // LC
     hcount = new bigint [nelement+1]; // total numner of switching with a vacancy;
 
@@ -737,6 +742,13 @@ if(concentrationflag) {
  //disp[i+ndiff][j] = 0.0;
     }
  }
+
+//LC initiallize initial temp time and i2
+  for(j = 0; j < nlocal; j++) {
+      ct_site_temp_t[j] = 0.0;
+      ct_site_temp_i2[j] = element[j];
+}
+
  //initialize i3_site value
 dt_i3_site_new =0.0;
  for(int i = 0; i < 5; i++) {
@@ -1137,6 +1149,10 @@ void Appcoros::site_event(int i, class RandomPark *random)
 
     update_propensity(i);
     update_propensity(j);
+
+    //LC update current i and j
+    cur_i = i;
+    cur_j = j;
     // int jid;
     // for (int idx=0;idx<numneigh[i];idx++){
     //   jid = neighbor[i][idx];
@@ -3192,6 +3208,10 @@ int sum = 0;
   update_propensity(i);
   update_propensity(jid);
 
+  // LC sotroing active site i and j
+  cur_i = i;
+  cur_j = jid;
+
   nreact++; // count total number of reaction by LC
 }
 
@@ -3397,37 +3417,75 @@ void Appcoros::monomer_count(){
   the count for time_average_concentration and site_concentration is in this function.
   but separate into different func due to different d_time when average compute
 
-  !!future check
-  1. if possible, let the time summation only affect the active site not all system
-  go though nlocal every event is waste of time
+  // update dt_site with better efficiency
+  // the idea of site concentration are the same
+  // but change the implimentation, update the active site only
+  // other site will be update at end of sector
 ------------------------------------------------------------------------- */
-void Appcoros::concentration_field(double dt)
+void Appcoros::concentration_field(double dt, double time_sector)
 {
-  dt_new += dt; // update time interval for time_average_concentration
-  dt_site_c_new += dt;
-  dt_i3_site_new += dt;
+  //dt_new += dt; // update time interval for time_average_concentration
+  dt_site_c_new += dt;       // total time interval in 1 sector
+  site_time_interval += dt;  // total time interval across sectors
+  //dt_i3_site_new += dt;
 
-  for(int i = 0; i < nlocal; i++) {
-     ct_new[element[i]] += dt; // total concentration
-     ct_site_new[element[i]][i] += dt; // site concentration per kmc step
-     i3_site_new[potential[i]][i] += dt;
-  }
+  // for(int i = 0; i < nlocal; i++) {
+  //    ct_new[element[i]] += dt; // total concentration
+  //    ct_site_new[element[i]][i] += dt; // site concentration per kmc step
+  //    i3_site_new[potential[i]][i] += dt;
+  // }
+
+
+  // LC, new site concentration calculation, testing
+  //i and j are the active site that do site event
+  // this works for diffusion and reaction
+  double t_interval = 0.0;
+  // for compare var1 == var2 -> true:1, false=0
+  t_interval = (time_sector - dt ) - ct_site_temp_t[cur_i];
+  ct_site_new[ct_site_temp_i2[cur_i]][cur_i] += t_interval ;
+
+  t_interval = (time_sector - dt ) - ct_site_temp_t[cur_j];
+  ct_site_new[ct_site_temp_i2[cur_j]][cur_j] += t_interval ;
+
+  //update temp time, time format
+  ct_site_temp_t[cur_i] = (time_sector - dt );  // update
+  ct_site_temp_t[cur_j] = (time_sector - dt );
+
+  // update, element/i2 type
+  ct_site_temp_i2[cur_i] = element[cur_i]; // update
+  ct_site_temp_i2[cur_j] = element[cur_j];
+
   return;
+}
+
+/* ----------------------------------------------------------------------
+update site concentration
+by LC
+------------------------------------------------------------------------- */
+void Appcoros::site_concentration_calc(){
+  int j;
+  double t_interval = 0.0;
+    for (j=0;j<nlocal;j++){
+      t_interval = dt_site_c_new - ct_site_temp_t[j];
+      ct_site_new[ct_site_temp_i2[j]][j] += t_interval ;
+      ct_site_temp_t[j] = 0.0; // reset
+    }
+    dt_site_c_new = 0.0; //reset
 }
 
 /* ----------------------------------------------------------------------
   update time averaged total concentration concentrations only
   this function runs after every sector loop
 ------------------------------------------------------------------------- */
-void Appcoros::time_averaged_concentration()
+void Appcoros::time_averaged_concentration(double time)
 {
-  if(dt_new <= 0){
-    return;
-  }
-  for(int i = 1; i <= nelement; i++) { // ct = c*t / dt
-     ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
-     ct_new[i] = 0.0; //start recounting
-   }
+  // if(dt_new <= 0){
+  //   return;
+  // }
+  // for(int i = 1; i <= nelement; i++) { // ct = c*t / dt
+  //    ct[i] = ct_new[i]/dt_new/nlocal; //time and spatial average
+  //    ct_new[i] = 0.0; //start recounting
+  //  }
      // !!site_concentration part was separated to ct_site_extract!!
      // for(int j = 0; j < nlocal; j++) {
 	   //    //disp[ndiff+i][j] = ct_site[i][j]/dt_new; //time average
@@ -3435,7 +3493,21 @@ void Appcoros::time_averaged_concentration()
 	   //    ct_site_new[i][j] = 0.0; //start recounting
      // }
 
-  dt_new = 0.0;
+// LC
+  int i,j;
+   for(i = 1; i <= nelement; i++) {
+      for(j = 0; j < nlocal; j++) {
+         ct_site[i][j] = ct_site_new[i][j]/site_time_interval;
+         ct_site_new[i][j] = 0.0; //recounting
+      }
+   }
+     // LC
+     // for (int j = 0; j<nlocal; j++){
+     //   ct_site_temp_t[j] = 0.0; // reset
+     // }
+     //dt_site_c_new = 0.0;
+
+  //dt_new = 0.0;
 }
 
 /* ----------------------------------------------------------------------
@@ -3445,21 +3517,28 @@ return ct_site **array called by app_lattice <-- dump_text
 use ctNi, ctVac, ctCu as input dump
 ------------------------------------------------------------------------- */
 double **Appcoros::ct_site_extract(){
-int check_flag;
-int jd;
+//int check_flag;
+//int jd;
   if(dt_site_c_new <= 0){
     return ct_site;
   }
-  // if(concentrationflag==0){ //excpetion for no concentrationflag
-  //   return ct_site;
+
+  // LC summation rest of them when compute
+
+
+  // for(int i = 1; i <= nelement; i++) {
+  //    for(int j = 0; j < nlocal; j++) {
+  //       ct_site[i][j] = ct_site_new[i][j]/dt_site_c_new;
+	//       ct_site_new[i][j] = 0.0; //recounting
+  //    }
   // }
-  for(int i = 1; i <= nelement; i++) {
-     for(int j = 0; j < nlocal; j++) {
-        ct_site[i][j] = ct_site_new[i][j]/dt_site_c_new;
-	      ct_site_new[i][j] = 0.0; //recounting
-     }
-  }
-  dt_site_c_new = 0.0;
+  // dt_site_c_new = 0.0;
+  // // LC
+  // for (int j = 0; j<nlocal; j++){
+  //   ct_site_temp_t[j] = 0.0; // reset
+  // }
+
+
 
 //// special case analysis
   // neighbor check and print if ct_site[vac][j] > 0 but its neighbor ct_site[vac][neighbor] is 0
@@ -3508,7 +3587,30 @@ dt_i3_site_new = 0;
 
 return i3_site;
 }
+/* ----------------------------------------------------------------------
+output temp into in dump file per site
+------------------------------------------------------------------------- */
+double *Appcoros::temp_t_extract(){
 
+
+// if(dt_i3_site_new <= 0){
+//   return i3_site;
+// }
+
+
+return ct_site_temp_t;
+}
+/* ----------------------------------------------------------------------
+output temp into in dump file per site
+------------------------------------------------------------------------- */
+int *Appcoros::temp_i2_extract(){
+// if(dt_i3_site_new <= 0){
+//   return i3_site;
+// }
+
+
+return ct_site_temp_i2;
+}
 /* ----------------------------------------------------------------------
 metal_pure_vac approximation in lattice
 this function is count the pure vac in metal region in lattice without knowing the boundary
@@ -3671,9 +3773,3 @@ for ( idx = 0 ;idx < nlocal; idx++){
   //   }
 
 }
-
-
-/* ----------------------------------------------------------------------
-flag function
-this function is for app_lattice to load
-------------------------------------------------------------------------- */
