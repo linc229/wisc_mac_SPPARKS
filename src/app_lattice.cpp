@@ -584,7 +584,7 @@ void AppLattice::iterate_kmc_global(double stoptime)
     }
 
     if (clst_flag && (done || time >= nextoutput)) cluster();
-    if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(time); // calculate time averaged concentration
+    if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration
 
     //LC dump_event list
     if(dump_event_flag){
@@ -789,7 +789,7 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (time >= stoptime) alldone = 1;
     if (alldone || time >= nextoutput) {
        if(clst_flag) cluster(); //yongfeng
-       if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(time); // calculate time averaged concentration, LC
+       if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration, LC
        //LC test
        if(dump_event_flag){dump_event(dt_kmc); }// output event list per dump
        nextoutput = output->compute(time,alldone); //LC note: here stats and dump --> compute function in output.cpp

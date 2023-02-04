@@ -3477,7 +3477,7 @@ void Appcoros::site_concentration_calc(){
   update time averaged total concentration concentrations only
   this function runs after every sector loop
 ------------------------------------------------------------------------- */
-void Appcoros::time_averaged_concentration(double time)
+void Appcoros::time_averaged_concentration()
 {
   // if(dt_new <= 0){
   //   return;

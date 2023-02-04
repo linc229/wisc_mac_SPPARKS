@@ -236,7 +236,7 @@ class Appcoros : public AppLattice {
   int KMC_stop(); //by LC
   int vac_monomer_count(); //by LC
   void concentration_field(double, double); //calculation concentration field
-  void time_averaged_concentration(double); // calculate time-averaged concentration
+  void time_averaged_concentration(); // calculate time-averaged concentration
   void site_concentration_calc();     // by LC
   void monomer_count();
   //void ct_reset(); // reset time-average concentration after diag call
