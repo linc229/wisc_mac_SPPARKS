@@ -271,6 +271,9 @@ void Appcoros::input_app(char *command, int narg, char **arg)
 
     memory->create(ct_site_temp_t,nlocal,"app/coros:ct_site_temp_t");  //LC
     memory->create(ct_site_temp_i2,nlocal,"app/coros:ct_site_temp_i2");  //LC
+    
+    memory->create(site_time,nlocal,"app/coros:site_time");  //LC
+    memory->create(site_time_interval,8,"app/coros:site_time_interval");  //LC
 
     memory->create(i3_site,5,nlocal,"app/coros:i3_site"); // LC
 
@@ -667,9 +670,7 @@ void Appcoros::init_app()
   }
 
   int flagall;
-  //fprintf(screen, "test\n"); // LC test
   MPI_Allreduce(&flag,&flagall,1,MPI_INT,MPI_SUM,world);
-  //fprintf(screen, "%d\n", flagall); // LC test
   if (flagall) error->all(FLERR,"One or more sites have invalid values");
 
   // check if reactions need to be enabled or disabled
@@ -744,11 +745,15 @@ if(concentrationflag) {
  }
 
 //LC initiallize initial temp time and i2
+time_sector = 0.0;
   for(j = 0; j < nlocal; j++) {
       ct_site_temp_t[j] = 0.0;
       ct_site_temp_i2[j] = element[j];
+      site_time[j] = 0.0;
 }
-
+  for (j=0; j<8; j++){
+site_time_interval[j] = 0.0;
+}
  //initialize i3_site value
 dt_i3_site_new =0.0;
  for(int i = 0; i < 5; i++) {
@@ -1223,6 +1228,9 @@ void Appcoros::site_event(int i, class RandomPark *random)
     nsites_local[j-1] ++;
 
     salt_remove(i);
+
+    total_vac ++;  // real time number of i2
+    total_Cr --;
     //update after reaction, it will update in salt_remove function
     //just leave here for check
     update_propensity(i);
@@ -3422,11 +3430,10 @@ void Appcoros::monomer_count(){
   // but change the implimentation, update the active site only
   // other site will be update at end of sector
 ------------------------------------------------------------------------- */
-void Appcoros::concentration_field(double dt, double time_sector)
+void Appcoros::concentration_field(double dt)
 {
   //dt_new += dt; // update time interval for time_average_concentration
-  dt_site_c_new += dt;       // total time interval in 1 sector
-  site_time_interval += dt;  // total time interval across sectors
+
   //dt_i3_site_new += dt;
 
   // for(int i = 0; i < nlocal; i++) {
@@ -3435,22 +3442,54 @@ void Appcoros::concentration_field(double dt, double time_sector)
   //    i3_site_new[potential[i]][i] += dt;
   // }
 
+  // total occupancy on whole lattice, different (shorter) time interval from site concentration
+  ct_time += dt;
+  ct_new[1] += total_Ni * dt;
+  ct_new[2] += total_vac * dt;
+  ct_new[3] += total_Cr * dt;
+
+  //active_vac_new share same time interval with ct_time
 
   // LC, new site concentration calculation, testing
   //i and j are the active site that do site event
   // this works for diffusion and reaction
+  dt_site_c_new += dt;       // total time interval in 1 sector
+  //site_time_interval += dt;  // total time interval across sectors, total time for site concentration
+  time_sector += dt;         // current time point in sector;
+
+
   double t_interval = 0.0;
-  // for compare var1 == var2 -> true:1, false=0
   t_interval = (time_sector - dt ) - ct_site_temp_t[cur_i];
-  ct_site_new[ct_site_temp_i2[cur_i]][cur_i] += t_interval ;
+  ct_site_new[ct_site_temp_i2[cur_i]][cur_i] += t_interval ;  // occupancy
+  site_time[cur_i] += t_interval;
+  // LC test
+  if(t_interval<0){
+    fprintf(screen, "t_interval:%f, time_sector:%f, dt:%f, ct_site_temp_t[cur_i]:%f\n", t_interval, time_sector, dt, ct_site_temp_t[cur_i]);
+  }
+
+
+  if (ct_site_temp_i2[cur_i]==2) {active_vac_new += t_interval;} // active vac
+  //active_vac_new += t_interval;
 
   t_interval = (time_sector - dt ) - ct_site_temp_t[cur_j];
   ct_site_new[ct_site_temp_i2[cur_j]][cur_j] += t_interval ;
+  site_time[cur_j] += t_interval;
 
+  // LC test
+  if(t_interval<0){
+    fprintf(screen, "t_interval:%f, time_sector:%f, dt:%f, ct_site_temp_t[cur_i]:%f\n", t_interval, time_sector, dt, ct_site_temp_t[cur_j]);
+  }
+
+  if (ct_site_temp_i2[cur_j]==2) {active_vac_new += t_interval;} // active vac
+
+  //fprintf(screen, "time_sector:%f, dt:%f\n", time_sector, dt);
   //update temp time, time format
   ct_site_temp_t[cur_i] = (time_sector - dt );  // update
   ct_site_temp_t[cur_j] = (time_sector - dt );
-
+  // LC test
+  if(time_sector-dt<0){
+    fprintf(screen, "time_sector-dt:%f\n", (time_sector-dt));
+  }
   // update, element/i2 type
   ct_site_temp_i2[cur_i] = element[cur_i]; // update
   ct_site_temp_i2[cur_j] = element[cur_j];
@@ -3462,15 +3501,43 @@ void Appcoros::concentration_field(double dt, double time_sector)
 update site concentration
 by LC
 ------------------------------------------------------------------------- */
-void Appcoros::site_concentration_calc(){
+void Appcoros::site_concentration_calc(int iset, int nset){
+  // iset: nth sector
+  // for n = 4, iset = 0, 1, 2, 3
   int j;
   double t_interval = 0.0;
-    for (j=0;j<nlocal;j++){
-      t_interval = dt_site_c_new - ct_site_temp_t[j];
-      ct_site_new[ct_site_temp_i2[j]][j] += t_interval ;
-      ct_site_temp_t[j] = 0.0; // reset
-    }
+  int first = 0 + iset * nlocal/nset;
+  int last = (iset+1) * nlocal/nset;
+  for (j=first;j<last;j++){
+    t_interval = dt_site_c_new - ct_site_temp_t[j];
+    // LC test
+    // if(t_interval<0){
+    //   fprintf(screen, "t_interval:%f, dt_site_c_new:%f, ct_site_temp_t[j]:%f\n", t_interval, dt_site_c_new, ct_site_temp_t[j]);
+    // }
+
+    ct_site_new[ct_site_temp_i2[j]][j] += t_interval ;
+    // site experienced time; !! by LC
+    site_time[j] += t_interval;
+    //ct_site_temp_t[j] = 0.0; // reset
+  }
+
+  fill_n(ct_site_temp_t, nlocal, 0.0); // set whole array to 0
+  site_time_interval[iset] += time_sector;  // add site_time_interval for each sector
+
+    // for (j=0;j<nlocal;j++){
+    //   t_interval = dt_site_c_new - ct_site_temp_t[j];
+    //
+    //   // LC test
+    //   if(t_interval<0){
+    //     fprintf(screen, "t_interval:%f, dt_site_c_new:%f, ct_site_temp_t[j]:%f\n", t_interval, dt_site_c_new, ct_site_temp_t[j]);
+    //   }
+    //
+    //   ct_site_new[ct_site_temp_i2[j]][j] += t_interval ;
+    //   ct_site_temp_t[j] = 0.0; // reset
+    //
+    // }
     dt_site_c_new = 0.0; //reset
+    time_sector = 0.0;  // reset
 }
 
 /* ----------------------------------------------------------------------
@@ -3494,13 +3561,13 @@ void Appcoros::time_averaged_concentration()
      // }
 
 // LC
-  int i,j;
-   for(i = 1; i <= nelement; i++) {
-      for(j = 0; j < nlocal; j++) {
-         ct_site[i][j] = ct_site_new[i][j]/site_time_interval;
-         ct_site_new[i][j] = 0.0; //recounting
-      }
-   }
+  // int i,j;
+  //  for(i = 1; i <= nelement; i++) {
+  //     for(j = 0; j < nlocal; j++) {
+  //        ct_site[i][j] = ct_site_new[i][j]/site_time_interval;
+  //        ct_site_new[i][j] = 0.0; //recounting
+  //     }
+  //  }
      // LC
      // for (int j = 0; j<nlocal; j++){
      //   ct_site_temp_t[j] = 0.0; // reset
@@ -3517,11 +3584,26 @@ return ct_site **array called by app_lattice <-- dump_text
 use ctNi, ctVac, ctCu as input dump
 ------------------------------------------------------------------------- */
 double **Appcoros::ct_site_extract(){
-//int check_flag;
-//int jd;
-  if(dt_site_c_new <= 0){
+
+  if(site_time_interval[0] <= 0){
     return ct_site;
   }
+  int i,j;
+
+   for(i = 1; i <= nelement; i++) {
+      for(j = 0; j < nlocal; j++) {
+         ct_site[i][j] = ct_site_new[i][j]/site_time[j];
+         ct_site_new[i][j] = 0.0; //recounting
+      }
+   }
+
+   for (j=0; j<8;j++){
+   site_time_interval[j] = 0.0;
+ }
+
+ for (j=0; j<nlocal; j++){
+   site_time[j] = 0.0;
+ }
 
   // LC summation rest of them when compute
 
@@ -3562,6 +3644,42 @@ double **Appcoros::ct_site_extract(){
 
   return ct_site;
 }
+
+/* ----------------------------------------------------------------------
+ct_extract
+compute site_concentration and average
+return ct_site **array called by app_lattice <-- dump_text
+use ctNi, ctVac, ctCu as input dump
+------------------------------------------------------------------------- */
+double *Appcoros::ct_extract(){
+  int i,j;
+if(ct_time <= 0){
+  return ct;
+}
+
+  for (i=1; i<= nelement; i++){
+    ct[i] = ct_new[i]/ct_time/nlocal;
+    ct_new[i] = 0.0; //reset
+  }
+ct_time = 0.0; // reset
+
+return ct;
+}
+/* ----------------------------------------------------------------------
+active_vac_extract
+from diag_
+------------------------------------------------------------------------- */
+double Appcoros::active_vac_extract(){
+  int i,j;
+if(ct_time <= 0){
+  return active_vac;
+}
+
+active_vac = active_vac_new / ct_time/nlocal;
+active_vac_new = 0.0;
+
+return active_vac;
+}
 /* ----------------------------------------------------------------------
 site concentration of i3 ==0,1
 output in dump file per site
@@ -3592,22 +3710,12 @@ output temp into in dump file per site
 ------------------------------------------------------------------------- */
 double *Appcoros::temp_t_extract(){
 
-
-// if(dt_i3_site_new <= 0){
-//   return i3_site;
-// }
-
-
 return ct_site_temp_t;
 }
 /* ----------------------------------------------------------------------
 output temp into in dump file per site
 ------------------------------------------------------------------------- */
 int *Appcoros::temp_i2_extract(){
-// if(dt_i3_site_new <= 0){
-//   return i3_site;
-// }
-
 
 return ct_site_temp_i2;
 }

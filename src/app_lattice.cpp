@@ -740,14 +740,15 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 	    naccept++; // LC note: actuall number of event
 
 
-      if (concentrationflag) concentration_field(dt, timesector); //yongfeng, LC --edited, this function should be located after site_event
+      if (concentrationflag) concentration_field(dt); //yongfeng, LC --edited, this function should be located after site_event
 	  }
 	  timer->stamp(TIME_APP);
 	}
 
       }
 
-      if(concentrationflag) site_concentration_calc(); // LC update
+      //update after one of sectors, only update the site in the sector
+      if(concentrationflag) site_concentration_calc(iset,nset); // LC update
 
       //LC timing
       if(time_check_flag){
@@ -760,6 +761,9 @@ void AppLattice::iterate_kmc_sector(double stoptime)
 	timer->stamp(TIME_COMM);
       }
     } // LC note: end of nsector iteration
+
+    // site concentration_update after sector iteration
+    //if(concentrationflag) site_concentration_calc(); // LC update
 
     if (allow_app_update) app_update(dt_kmc);
 
@@ -789,7 +793,10 @@ void AppLattice::iterate_kmc_sector(double stoptime)
     if (time >= stoptime) alldone = 1;
     if (alldone || time >= nextoutput) {
        if(clst_flag) cluster(); //yongfeng
-       if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration, LC
+       if (concentrationflag && (done || time >= nextoutput)) {
+         //time_averaged_concentration(); // calculate time averaged concentration, LC comment
+
+       }
        //LC test
        if(dump_event_flag){dump_event(dt_kmc); }// output event list per dump
        nextoutput = output->compute(time,alldone); //LC note: here stats and dump --> compute function in output.cpp

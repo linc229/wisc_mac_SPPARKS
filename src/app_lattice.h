@@ -80,9 +80,9 @@ class AppLattice : public App {
   virtual void check_sinkmotion(double) {} //Yongfeng
   virtual double real_time(double) { return 0.0; } //yongfeng
   virtual void time_tracer(double) {} //yongfeng
-  virtual void concentration_field(double, double) {} //yongfeng
+  virtual void concentration_field(double) {} //yongfeng
   virtual void time_averaged_concentration() {}; // calculate time-averaged concentration
-  virtual void site_concentration_calc() {}; // LC
+  virtual void site_concentration_calc(int, int) {}; // LC
   virtual void cluster() {} //yongfeng
   virtual void sia_concentration(double) {} //Yongfeng
   virtual void onsager(double) {} //Yongfeng

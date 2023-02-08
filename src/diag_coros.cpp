@@ -35,7 +35,7 @@ enum{monoFE=51, monoVACANCY, monoCU};             // number of mono-particle
 enum{react=61, surffe, surfcu, bulkfe, bulkcu, nsalt, nsaltdiff};     // number of each events
 enum{dFE=71,dVACANCY,dCU,dNI,dMN,dSi,dP,dC,dSIA}; // MSD for each element !! >dFE is floater
 enum{energy=81,treal,fvt, metal_energy};                        // energy and realistic time
-enum{cVAC=91,cFE,cVACANCY,cCU, cCE4, cCE5, cCE6, cCE7, cCE8}; 	// time averaged concentration
+enum{cVAC=91,cFE,cVACANCY,cCU, cCE4, cCE5, cCE6, cCE7, cCE8, activevac}; 	// time averaged concentration
 enum{msdFE=101,msdVACANCY,msdCU};  // MSD calculation by LC
 enum{dFEx=111,dFEy, dFEz,dVACANCYx,dVACANCYy,dVACANCYz,dCUx,dCUy,dCUz};  // MSD calculation by LC
 //!! be careful for the integer and float at line 164 when adding new variables
@@ -117,6 +117,9 @@ void Diagcoros::init()
     // else if (strcmp(list[i],"cce6") == 0) which[i] = cCE6;
     // else if (strcmp(list[i],"cce7") == 0) which[i] = cCE7;
     // else if (strcmp(list[i],"cce8") == 0) which[i] = cCE8;
+
+    else if (strcmp(list[i],"act_V") == 0) which[i] = activevac;
+
     else if (strcmp(list[i], "monofe") == 0) which[i] = monoFE;
     else if (strcmp(list[i], "monovac") == 0) which[i] = monoVACANCY;
     else if (strcmp(list[i], "monocu") == 0) which[i] = monoCU;
@@ -227,14 +230,17 @@ void Diagcoros::compute()
   double msd[10];
   double dir_msd[9]; // LC total MSD per direction
   double *sd; // for store sd array
-
+  double active_vac; // LC
 
   ninter = nfloater = 0;
   dvalue = 0.0;
 
   // time averaged concengtration
-  if(csiteflag) {csites = appcoros->ct;
+  if(csiteflag) {
+    //csites = appcoros->ct;
     //appcoros-> ct_reset(); // set ct_reset_flag = 1;
+    active_vac = appcoros -> active_vac_extract();
+    csites = appcoros -> ct_extract();
   }
 
 
@@ -296,6 +302,8 @@ void Diagcoros::compute()
     // else if (which[i] == cCE6) ivalue = csites[CE6];
     // else if (which[i] == cCE7) ivalue = csites[CE7];
     // else if (which[i] == cCE8) ivalue = csites[CE8];
+
+    else if (which[i] == activevac) dvalue = active_vac;
 
     // count monomer for each particle from i2 by LC
     else if (which[i] == monoFE){
