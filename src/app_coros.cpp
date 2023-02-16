@@ -56,11 +56,13 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
 
   engstyle = 1; //1 for 1NN interaction, 2 for 2NN interaction; default 1
   diffusionflag = 0; //flag for MSD calculations, 1 for yes, 0 for no; default 0
+  //seg_flag = 0; // LC
+  eisink_flag = 0; // LC
+
   if (narg < 1) error->all(FLERR,"Illegal app_style command");
   if (narg >= 2) engstyle = atoi(arg[1]);
   if (narg >= 3) diffusionflag = atoi(arg[2]);
   if (narg >= 4) concentrationflag = atoi(arg[3]);
-  //fprintf(screen,"engstyle:%d, diffusionflag:%d\n", engstyle, diffusionflag );
   if (engstyle == 2) delpropensity += 1;// increase delpropensity for 2NN interaction
 
   // darray 1-4 for msd if activated, followed by concentrations
@@ -96,6 +98,12 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   attemptfrequencyflag = 0;
   attemptfrequency = NULL;
 
+  // reset hcount by LC
+  //for (int i=0; i<=nelement; i++){
+  //  hcount[i] = 0;
+  //}
+
+
   // flags and parameters for sinks, dislocations, reactions and ballistic mixing
   sink_flag = elastic_flag = moduli_flag = dislocation_flag = reaction_flag = acceleration_flag = 0; //flags for sink dislocation and vacancy
   nsink = ndislocation = nreaction = nballistic = ntrap = 0;
@@ -107,9 +115,14 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   dislocation_radius = NULL;
 
   // arrays for sinks
-  sink_shape = sink_type = sink_normal = sink_segment = nabsorption = NULL;
-  sink_strength = sink_radius = sink_mfp = NULL;
-  xsink = NULL;
+  // sink_shape = sink_type = sink_normal = sink_segment = nabsorption = NULL;
+  // sink_strength = sink_radius = sink_mfp = NULL;
+  // xsink = NULL;
+  isink = sink_shape = sink_normal = sink_segment = NULL;
+  sink_range = sink_radius = ci = sink_dr = sink_dt = sink_dt_new = sink_dt_old =  NULL;
+  xsink = sink_mfp = NULL;
+  sinksite = NULL;
+  nabsorption = nreserve = sinkid = NULL;
 
   // arrays for reactions
   rsite = rinput = routput = rcount = renable = rtarget = NULL;
@@ -127,6 +140,7 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   salt_bfreq = NULL;
   salt_time_old = salt_time_new = NULL;
   num_saltdiffusion = 0;
+  temp_salt_time = 1;
 
   // 2NN neigbor information
   numneigh2 = NULL;
@@ -161,6 +175,13 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
   dump_event_all_index = 0;
   dump_event_all_file = 0;
   dump_event_all_flag = 0;
+
+
+  // corrosion_info_output parameter by LC
+  //coros_flag = 0;
+  coros_index = 0;
+  coros_time = NULL;
+  coros_id = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -196,16 +217,31 @@ Appcoros::~Appcoros()
   }
 
   if (sink_flag) { // memory use related to sink
+    // memory->destroy(sink_shape);
+    // memory->destroy(sink_type);
+    // memory->destroy(sink_strength);
+    // memory->destroy(xsink);
+    // memory->destroy(isink);
+    // memory->destroy(sink_normal);
+    // memory->destroy(sink_segment);
+    // memory->destroy(sink_radius);
+    // memory->destroy(sink_mfp);
+    // memory->destroy(nabsorption);
     memory->destroy(sink_shape);
-    memory->destroy(sink_type);
-    memory->destroy(sink_strength);
+    memory->destroy(sink_range);
     memory->destroy(xsink);
     memory->destroy(isink);
+    memory->destroy(sinksite);
+    memory->destroy(sinkid);
     memory->destroy(sink_normal);
     memory->destroy(sink_segment);
     memory->destroy(sink_radius);
-    memory->destroy(sink_mfp);
+    memory->destroy(eisink);
+    memory->destroy(sink_dt_new);
+    memory->destroy(sink_dt_old);
+    memory->destroy(sink_dr);
     memory->destroy(nabsorption);
+    memory->destroy(nreserve);
   }
 
   if (ballistic_flag) { // memory use related to ballistic mixing
@@ -242,6 +278,12 @@ Appcoros::~Appcoros()
   if (acceleration_flag) {// memory use for acceleraton
     memory->destroy(trap_type);
   }
+
+  if (coros_flag) {  // corrosion_info_output
+    memory->destroy(coros_id);
+    memory->destroy(coros_time);
+  }
+
 }
 
 /* ----------------------------------------------------------------------
@@ -271,14 +313,14 @@ void Appcoros::input_app(char *command, int narg, char **arg)
 
     memory->create(ct_site_temp_t,nlocal,"app/coros:ct_site_temp_t");  //LC
     memory->create(ct_site_temp_i2,nlocal,"app/coros:ct_site_temp_i2");  //LC
-    
+
     memory->create(site_time,nlocal,"app/coros:site_time");  //LC
     memory->create(site_time_interval,8,"app/coros:site_time_interval");  //LC
 
     memory->create(i3_site,5,nlocal,"app/coros:i3_site"); // LC
 
     memory->create(i3_site_new,5,nlocal,"app/coros:i3_site_new"); // LC
-    hcount = new bigint [nelement+1]; // total numner of switching with a vacancy;
+    hcount = new double [nelement+1]; // total numner of switching with a vacancy;
 
     if(narg != nelement*(nelement+1)/2+1) error->all(FLERR,"Illegal ebond command");
     nn1flag = 1;
@@ -404,33 +446,101 @@ void Appcoros::input_app(char *command, int narg, char **arg)
       evol[itype] = atof(arg[iarg+1]);
       iarg += 2;
     }
-  }
+  }*/
   // define sinks to defects, could be dislocations or interfaces or 3D regions
+  // else if (strcmp(command, "sink") ==0) {
+  //   if(narg != 10) error->all(FLERR,"illegal sink command");
+  //   if(sink_flag == 0) {
+  //     memory->create(isink, nlattice, nelement,"app/coros:isink");
+  //     for(i = 0; i < nlattice; i++) {
+  //       for(j = 0; j < nelement; j++)  isink[i][j] = 0;
+  //     }
+  //   }
+  //   sink_flag = 1;
+  //   grow_sinks();
+  //   sink_type[nsink] = atoi(arg[0]); // sink to certain element
+  //   sink_strength[nsink] = atof(arg[1]); // thickness of sink
+  //   sink_shape[nsink] = atoi(arg[2]); // 1 dislocation, 2 interface, 3 3D region
+  //   xsink[nsink][0] = atof(arg[3]); // coordinaiton of sink center
+  //   xsink[nsink][1] = atof(arg[4]);
+  //   xsink[nsink][2] = atof(arg[5]);
+  //   sink_normal[nsink] = atoi(arg[6]); // normal of planar sinks
+  //   sink_radius[nsink] = atof(arg[7]); // radius for circular or polygonal sinks
+  //   sink_segment[nsink] = atoi(arg[8]); // # of segment for polygon sinks
+  //   sink_mfp[nsink] = atof(arg[9]); // mean free path in this sink
+  //   nabsorption[nsink] = 0; // initialize number of absorptions
+  //   sink_creation(nsink); //create the nth sink, can overlap with other sinks
+  //   nsink ++;
+  // }
   else if (strcmp(command, "sink") ==0) {
-    if(narg != 10) error->all(FLERR,"illegal sink command");
-    if(sink_flag == 0) {
-      memory->create(isink, nlattice, nelement,"app/coros:isink");
-      for(i = 0; i < nlattice; i++) {
-        for(j = 0; j < nelement; j++)  isink[i][j] = 0;
-      }
-    }
+    if(narg != 8) error->all(FLERR,"illegal sink command");
+    if(sink_flag == 0) memory->create(isink, nlattice,"app/seg:isink");
+    if(sink_flag == 0) {for(i = 0; i < nlattice; i++)  isink[i] = 0;} // set no sink initially
     sink_flag = 1;
+
+    nsink ++;  // sink id starts from 1
     grow_sinks();
-    sink_type[nsink] = atoi(arg[0]); // sink to certain element
-    sink_strength[nsink] = atof(arg[1]); // thickness of sink
-    sink_shape[nsink] = atoi(arg[2]); // 1 dislocation, 2 interface, 3 3D region
-    xsink[nsink][0] = atof(arg[3]); // coordinaiton of sink center
-    xsink[nsink][1] = atof(arg[4]);
-    xsink[nsink][2] = atof(arg[5]);
-    sink_normal[nsink] = atoi(arg[6]); // normal of planar sinks
-    sink_radius[nsink] = atof(arg[7]); // radius for circular or polygonal sinks
-    sink_segment[nsink] = atoi(arg[8]); // # of segment for polygon sinks
-    sink_mfp[nsink] = atof(arg[9]); // mean free path in this sink
-    nabsorption[nsink] = 0; // initialize number of absorptions
+    sink_range[nsink] = atof(arg[0]); // thickness of sink
+    sink_shape[nsink] = atoi(arg[1]); // 1 dislocation, 2 interface, 3 3D region
+    xsink[nsink][0] = atof(arg[2]); // coordinaiton of sink center
+    xsink[nsink][1] = atof(arg[3]);
+    xsink[nsink][2] = atof(arg[4]);
+    sink_normal[nsink] = atoi(arg[5]); // normal of planar sinks
+    sink_radius[nsink] = atof(arg[6]); // radius for circular or polygonal sinks
+    sink_segment[nsink] = atoi(arg[7]); // # of segment for polygon sinks
     sink_creation(nsink); //create the nth sink, can overlap with other sinks
-    nsink ++;
   }
-*/
+
+  // define element-sink interaction by eisink. One element and one sink in each line. The id of a sink is the order in sink commands, starting from 1
+  else if (strcmp(command, "sink_interaction") ==0) {
+
+    if(sink_flag == 0) error->all(FLERR,"sink_interaction needs to be defined after the sink command");
+    if (narg < 3) error->all(FLERR,"Illegal sink_interaction command");
+    if (eisink_flag == 0) {// create element-sink interaction.
+       eisink_flag = 1;
+       memory->create(eisink,nelement,nsink+1,"app/ris:eisink");
+       memory->create(nabsorption,nelement,nsink+1,"app/ris:nabsorption");
+       memory->create(nreserve,nelement,nsink+1,"app/ris:nreserve");
+       memory->create(sink_mfp,nelement,nsink+1,"app/ris:sink_mfp");
+       for (i = 0; i < nelement; i++ ) {
+           for (j = 0; j < nsink+1; j++ ) {
+               eisink[i][j] = 0.0;  // eisink = 0.0: no inteaction; eisink< -100: complete absortion; others: trapping or repulsion
+               nabsorption[i][j] = 0;
+               nreserve[i][j] = 0;
+               sink_mfp[i][j] = 1.0;
+           }
+       }
+    }
+
+
+    int eletype = atoi(arg[0]); // element starts from 0
+    int sinkid = atoi(arg[1]); // sink id starts from 1
+    eisink[eletype][sinkid] = atof(arg[2]);
+    if(narg > 3) sink_mfp[eletype][sinkid] = atof(arg[3]);
+  }
+
+  // define sinks to defects, could be dislocations or interfaces or 3D regions
+  // else if (strcmp(command, "sink_motion") ==0) {
+  //
+  //   if(sink_flag == 0) error->all(FLERR,"sink_motion needs to be defined after the sink command");
+  //   if(narg < 3) error->all(FLERR,"illegal sink_motion command");
+  //   if(sinkmotion_flag == 0)  memory->create(sink_dr, nsink+1, "app/seg:sink_dr");
+  //   if(sinkmotion_flag == 0)  memory->create(sink_dt, nsink+1, "app/seg:sink_dt");
+  //   if(sinkmotion_flag == 0)  memory->create(sink_dt_new, nsink+1, "app/seg:sink_dt_new");
+  //   if(sinkmotion_flag == 0)  memory->create(sink_dt_old, nsink+1, "app/seg:sink_dt_old");
+  //   sinkmotion_flag = 1;
+  //
+  //   for (i = 0; i < nsink+1; i++) {sink_dr[i] = -1.0; sink_dt[i] = 0.0;} // by default no sink motion
+  //
+  //   int nseg = narg/3;
+  //   for (i = 0; i < nseg; i++) {
+  //       int sinkid = atoi(arg[i*3]); // sinkid start from 1
+  //       if(sinkid > nsink) error->all(FLERR,"sink_motion needs to be defined after the sink command");
+  //       sink_dr[sinkid] = atoi(arg[i*3+1]); // direction of sink motion (1 for x, 2 for y, and 3 or z), each step the displacement is a0/2
+  //       double velocity = atof(arg[i*3+2]); // a0/s
+  //       sink_dt[sinkid] = 0.5e12/velocity; // timestep for sink motion, in picosecond; the displacement each step is 0.5
+  //   }
+  // }
   // reactions for absorption and emission
   else if (strcmp(command, "reaction") ==0) {
 
@@ -535,7 +645,18 @@ else if (strcmp(command, "surfaceeffect") ==0) {
     }
 
   }
+  // corrosion_info_output input setting
+  else if (strcmp(command, "corrosion_info_output") ==0) {
 
+    if(narg != 1) error->all(FLERR,"illegal surfaceeffect command");
+    if(atoi(arg[0])==1){  // 1 = on, other = off
+      coros_flag = 1;
+      memory->create(coros_time,nlocal,"app/coros:coros_time");
+      memory->create(coros_id,nlocal,"app/coros:coros_id");
+    }
+    //coros_flag = atoi(arg[0]);
+
+  }
 /*
   else if (strcmp(command, "ballistic") ==0) {
     if(narg < 2) error->all(FLERR,"illegal ballistic command");
@@ -622,7 +743,6 @@ void Appcoros::grow_app()
     for (int i=0 ; i<nlocal;i++){
       aid[i] = i;
     }
-    //fprintf(screen, "ninteger:%d\n", ninteger);
     disp = darray; // msd; zero initially
   }
 }
@@ -784,6 +904,16 @@ dt_i3_site_new =0.0;
 // }
 
 
+// cacculate sink statistics; LC
+//sink_statistics();
+
+if(coros_flag) {  // LC coros info output
+  for( i = 0; i< nlocal; i++) {
+    coros_id[i] = -1;
+    coros_time[i] = 0.0;
+  }
+  //coros_index = 0;
+}
 
 
 
@@ -966,7 +1096,8 @@ double Appcoros::site_propensity(int i)
         if (sum_kd == 0) break; // no reaction // edited may need to double check later
         // count number of neighbor salt
 
-        if(!(sink_flag && isink[i][jid -1] == 1)) {//production at sinks allowed
+        // LC comment
+        //if(!(sink_flag && isink[i][jid -1] == 1)) {//production at sinks allowed
           ebarrier = rbarrier[j];
           // elastic
           /*
@@ -998,7 +1129,7 @@ double Appcoros::site_propensity(int i)
 
           add_event(i,jid,2,j,hpropensity);
           prob_reaction += hpropensity;
-        }
+        //}
       }
     }
   }
@@ -1229,6 +1360,9 @@ void Appcoros::site_event(int i, class RandomPark *random)
 
     salt_remove(i);
 
+
+    if(coros_flag) corrosion_info_output(i);  // LC Cr info record, output at the end
+
     total_vac ++;  // real time number of i2
     total_Cr --;
     //update after reaction, it will update in salt_remove function
@@ -1248,28 +1382,34 @@ void Appcoros::site_event(int i, class RandomPark *random)
   if(rstyle == 1 || rstyle == 3 || rstyle == 4) {
 
     //sink absorption,for hop only since no element produced at its sinks
-    /*
     if(nsink > 0) {
-      k = element[j];
-      for (n = 0; n < nsink; n++) {
-        if(isink[j][k-1] == 1) {
-          double rand_me = rancoros->uniform();
-          if(rand_me <= 1.0/sink_mfp[n]) {
-            nabsorption[n] ++;
-            nsites_local[k-1] --;
-            element[j] = FE;
-            // update reaction target number
-            if(reaction_flag == 1) {
-              for(ii = 0; ii < nreaction; ii++) {
-                if(routput[ii] != k) continue;
-                target_local[ii] ++;
-              }
-            }
-          }
-        }
-      }
+      absorption(i);
+      absorption(j);
     }
-*/
+    update_propensity(i);
+    update_propensity(j);
+// LC comment
+    // if(nsink > 0) {
+    //   k = element[j];
+    //   for (n = 0; n < nsink; n++) {
+    //     if(isink[j][k-1] == 1) {
+    //       double rand_me = rancoros->uniform();
+    //       if(rand_me <= 1.0/sink_mfp[n]) {
+    //         nabsorption[n] ++;
+    //         nsites_local[k-1] --;
+    //         element[j] = FE;
+    //         // update reaction target number
+    //         if(reaction_flag == 1) {
+    //           for(ii = 0; ii < nreaction; ii++) {
+    //             if(routput[ii] != k) continue;
+    //             target_local[ii] ++;
+    //           }
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
+
   //check recombinations after hopping; recombine with first SIA found
   /*
     for (n = 0; n < numneigh[j]; n++) {
@@ -1716,6 +1856,173 @@ void Appcoros::ballistic(int n)
 }
 
 /* ----------------------------------------------------------------------
+   check if any sink motion needs to be performed
+   // LC not use now
+------------------------------------------------------------------------- */
+void Appcoros::check_sinkmotion(double t)
+{
+  int nmove = 0;
+  for(int i = 1; i < nsink+1; i ++) {
+     if(sink_dr[i] < 0.0) continue; // skip static sinks
+     sink_dt_new[i] = static_cast<int>(t/sink_dt[i]);
+     nmove = sink_dt_new[i] - sink_dt_old[i];
+     while (nmove > 0) {  //perform mixing nmix times
+       nmove --;
+       sink_motion(i);
+       if(nmove == 0) sink_dt_old[i] = sink_dt_new[i];  //update time
+    }
+  }
+
+  return;
+}
+
+/* ----------------------------------------------------------------------
+   move sink n in the direction of sink_dr[n] with an amount of a0/2
+   This is done by delete sink n and recreate it with the center displaced by a0/2
+   // LC not use now
+------------------------------------------------------------------------- */
+void Appcoros::sink_motion(int n)
+{
+  int nlattice = nlocal + nghost;
+  double dr=sink_dr[n];
+  if(dr == 0.0) xsink[n][0] = xsink[n][0] + 0.5;
+  if(dr == 1.0) xsink[n][1] = xsink[n][1] + 0.5;
+  if(dr == 2.0) xsink[n][2] = xsink[n][2] + 0.5;
+
+  for (int i=0; i<nlattice; i++) {
+      if(isink[i] == n) isink[i] = 0; //remove sink n
+  }
+
+  sink_creation(n); //recreate sink n
+  return;
+}
+
+/* ----------------------------------------------------------------------
+   absorption of an element at site i. This is probabbly not needed.
+   LC modify:
+   the sink absorption remove vac and refill by Ni/Cr with chance 80% for Ni
+   20% for Cr.
+   previous code just used the ratio of current model, which has bias on possiblity
+   I also commented out most of unused function which improve some of efficiency
+------------------------------------------------------------------------- */
+void Appcoros::absorption(int i)
+{
+  int j,k,m,n,ei,ejd,ntotal,rand_me,jbound,jid;
+  int temp_element;
+
+// for(int id = 1; id< 100; i++){
+//   rand_me = static_cast<int>(rancoros->uniform()*100);
+//   fprintf(screen, "rand_me: %d\n", rand_me);
+// }
+  n = isink[i]; //sink id
+  if(n <= 0) return; // site i is not a sink
+
+  ntotal = 0;
+  ei = element[i];
+  ejd = -1;
+
+  if (ei!= VACANCY) return; // only absorb VAC
+  //if(ei > INT) return; // currently only absorbs VAC and INT, LC comment
+  if(eisink[ei][n] > -100) return; // not an absorbing sink
+  //if(rancoros->uniform() > 1.0/sink_mfp[ei][n]) return; // no absorption occurs , LC comment
+
+  nabsorption[ei][n] ++; // number of element ei absorbed by type of isink[i] sink
+  if(ei == VACANCY)  { // for vacancy choose a reserved atom to occupy
+    // LC comment
+     //for(m = CE1; m < nelement ; m++) {if(nreserve[m][n] > 0) ntotal += nreserve[m][n];} // count all reserved SIAs at sinks
+     // LC modify
+     while(ejd < 0) {
+         //rand_me = static_cast<int>(rancoros->uniform()*nlocal); // LC note: incorrect
+         rand_me = static_cast<int>(rancoros->uniform()*100);
+         //fprintf(screen, "rand_me: %d\n", rand_me);
+         if (rand_me > 80){temp_element = 1;}
+         else{temp_element = 3;}
+         ejd = temp_element;
+         //fprintf(screen, "ejd: %d\n", ejd);
+         //if(element[rand_me] != VACANCY) ejd = element[rand_me];
+     }
+     // LC comment
+     // if(ntotal > 0) {// choose from reserved elements at sinks
+     //   j = CE1;
+     //   jbound = 0;
+     //   rand_me = static_cast<int>(rancoros->uniform()*ntotal);
+     //   while(ejd < 0) {
+	   //       if(nreserve[j][n] > 0) jbound += nreserve[j][n];
+     //       if(rand_me < jbound) ejd = j;
+	   //       j++;
+	   //       if(j == nelement) ejd = j-1;
+     //   }
+     // } else {// if none reserved "borrow" one proportionally to the nominal composition from reserved
+     //   while(ejd < 0) {
+     //       rand_me = static_cast<int>(rancoros->uniform()*nlocal);
+	   //       if(element[rand_me] != VACANCY) ejd = element[rand_me];
+     //   }
+     // }
+     if(ejd == -1) error->all(FLERR,"no element found to recombine with vacancy at sink");
+
+     // recombine and recount the # of atoms and reserved atomsat sink n
+     nsites_local[ei] --;
+     nsites_local[ejd] ++;
+     element[i] = ejd;
+     // check potential value for absorption
+     if (element[i] == 1){potential[i] = 3;}
+     if (element[i] == 3){potential[i] = 4;}
+     //nreserve[ejd][n] --; // LC comment for segmentation fault
+  } else if (ei != VACANCY) { // randomly reserve one element from a dumbbell
+    // LC comment all, due to no dumbell in this code, and ei must be vac at this case
+     // nsites_local[ei] --;
+     //
+     // // mix the two dumbbell atoms with the atoms in sink n
+     // // then ramdomly select one to be put into reservior
+     // // the probability of dumb1 or dumb2 or a sink atom to go to resevior is 1/(nsink_site+1)
+     //
+     // j = static_cast<int>(rancoros->uniform()*(sinksite[n-1]+2));
+     // if(j == sinksite[n-1]+1) { //dmb2 goes to reservior
+     //    element[i] = dmb1[i];
+     //    nreserve[dmb2[i]][n] ++;
+     // } else if(j == sinksite[n-1]) { //dmb1 goes to reservior
+     //    element[i] = dmb2[i];
+     //    nreserve[dmb1[i]][n] ++;
+     // } else { // a selected sink atom goes to reservior, dmb1 stays at i and dmb2 goes to the sink site
+     //    element[i] = dmb1[i];
+	   //    jid = sinkid[n-1][j];
+     //    nsites_local[element[jid]] --;
+     //    nreserve[element[jid]][n] ++;
+     //
+     //    element[jid] = dmb2[i];
+     //    nsites_local[dmb2[i]] ++;
+     // }
+     //
+     // nsites_local[element[i]] ++;
+     // dmb1[i] = -1;
+     // dmb2[i] = -1;
+     // siatype[i] = -1;
+  }
+
+  // update reaction target number
+  // LC comment out for not using this section
+  /*
+  if (reaction_flag == 1) {
+     for(j = 0; j < nreaction; j++) {
+        if(routput[j] == ei) target_local[j] ++; // one less ei atom
+        if(routput[j] == element[i]) target_local[j] --; // one more element[i] atom
+
+        if(target_local[j] <= 0 && renable[j] == 1) {
+          renable[j] = 0;
+          reset_propensity();
+        }
+        if(target_local[j] > 0 && renable[j] == 0) {
+          renable[j] = 1;
+          reset_propensity();
+        }
+     }
+  }
+  */
+
+  return;
+}
+
+/* ----------------------------------------------------------------------
   calculating total exchange propensity
 ------------------------------------------------------------------------- */
 
@@ -1778,7 +2085,7 @@ double Appcoros::total_energy( )
     }
   }
 */
-  //fprintf(screen,"nevents: %d\n", nevents); //LC test
+  //fprintf(screen,"sector_flag: %d\n", sectorflag); //LC test
 
   return penergy/2.0;
 }
@@ -1920,21 +2227,28 @@ void Appcoros::grow_dislocations()
 /* ----------------------------------------------------------------------
   grow memory for sink
 ------------------------------------------------------------------------- */
-/*
+
 void Appcoros::grow_sinks()
 {
   int n = nsink + 1;
-  memory->grow(sink_shape,n,"app/coros:sink_shape");
-  memory->grow(sink_strength,n,"app/coros:sink_strength");
-  memory->grow(xsink,n,3,"app/coros:xsink");
-  memory->grow(sink_type,n,"app/coros:sink_type");
-  memory->grow(sink_normal,n,"app/coros:sink_normal");
-  memory->grow(sink_segment,n,"app/coros:sink_segmant");
-  memory->grow(sink_radius,n,"app/coros:sink_radius");
-  memory->grow(sink_mfp,n,"app/coros:sink_mfp");
-  memory->grow(nabsorption,n,"app/coros:nabsorption");
+  // memory->grow(sink_shape,n,"app/coros:sink_shape");
+  // memory->grow(sink_strength,n,"app/coros:sink_strength");
+  // memory->grow(xsink,n,3,"app/coros:xsink");
+  // memory->grow(sink_type,n,"app/coros:sink_type");
+  // memory->grow(sink_normal,n,"app/coros:sink_normal");
+  // memory->grow(sink_segment,n,"app/coros:sink_segmant");
+  // memory->grow(sink_radius,n,"app/coros:sink_radius");
+  // memory->grow(sink_mfp,n,"app/coros:sink_mfp");
+  // memory->grow(nabsorption,n,"app/coros:nabsorption");
+  memory->grow(sink_shape,n,"app/ris:sink_shape");
+  memory->grow(sink_range,n,"app/ris:sink_range");
+  memory->grow(xsink,n,3,"app/ris:xsink");
+  memory->grow(sink_normal,n,"app/ris:sink_normal");
+  memory->grow(sink_segment,n,"app/ris:sink_segmant");
+  memory->grow(sink_radius,n,"app/ris:sink_radius");
+
 }
-*/
+
 /* ----------------------------------------------------------------------
   grow memory for reaction
 ------------------------------------------------------------------------- */
@@ -1975,18 +2289,22 @@ void Appcoros::grow_ballistic()
 /* ----------------------------------------------------------------------
   create sinks
 ------------------------------------------------------------------------- */
-/*
+
 void Appcoros::sink_creation(int n)
 {
   int i,j,periodicity[3];
   int shape = sink_shape[n];
   int normal = sink_normal[n];
-  int ntype = sink_type[n];
+  //int ntype = sink_type[n];
   int segment = sink_segment[n];
   int nlattice = nlocal + nghost;
   double dx,dij[3],rik,rjk,lprd[3];
   double radius = sink_radius[n];
-  double strength = sink_strength[n]*sink_strength[n];
+  //double strength = sink_strength[n]*sink_strength[n];
+
+  double range = sink_range[n]*sink_range[n];
+
+
   // get periodicity and box length
   periodicity[0] = domain->xperiodic;
   periodicity[1] = domain->yperiodic;
@@ -2004,7 +2322,8 @@ void Appcoros::sink_creation(int n)
         if(periodicity[j] && dij[j] <= -lprd[j]/2.0) dij[j] += lprd[j];
       }
       dx = dij[0]*dij[0]+dij[1]*dij[1]+dij[2]*dij[2];
-      if(dx < strength) isink[i][ntype-1] = 1;
+      //if(dx < strength) isink[i][ntype-1] = 1;
+      if(dx < range) isink[i] = n;
     }
   }
   // circular or polygon sinks, e.g., dislocation loops
@@ -2020,7 +2339,8 @@ void Appcoros::sink_creation(int n)
         }
         rik = sqrt(dx);
         rjk = (rik-radius)*(rik-radius) + dij[normal]*dij[normal];
-        if( rjk < strength) isink[i][ntype-1] = 1;
+        //if( rjk < strength) isink[i][ntype-1] = 1; // LC comment
+        if( rjk < range) isink[i] = n;
       }
     }
     else {
@@ -2049,7 +2369,8 @@ void Appcoros::sink_creation(int n)
         double phi = fabs(theta_xyz - (d+0.5)*theta);
         rik = sqrt(dx);
         rjk = (rik-radius/cos(phi))*(rik-radius/cos(phi)) + dij[normal]*dij[normal];
-        if( rjk < strength) isink[i][ntype-1] = 1;
+        //if( rjk < strength) isink[i][ntype-1] = 1; // LC
+        if( rjk < range) isink[i] = n;
       }
     }
   }
@@ -2059,7 +2380,8 @@ void Appcoros::sink_creation(int n)
       dx = xyz[i][normal]-xsink[n][normal];
       if(periodicity[normal] && dx >= lprd[normal]/2.0) dx -= lprd[normal];
       if(periodicity[normal] && dx <= -lprd[normal]/2.0) dx += lprd[normal];
-      if(dx*dx < strength) isink[i][ntype-1] = 1;
+      //if(dx*dx < strength) isink[i][ntype-1] = 1; // LC
+      if(dx*dx < range) isink[i] = n;
     }
   }
   // 3D spherical sinks, e.g., precipitates
@@ -2071,11 +2393,43 @@ void Appcoros::sink_creation(int n)
         if(periodicity[j] && dij[j] <= -lprd[j]/2.0) dij[j] += lprd[j];
       }
       dx = dij[0]*dij[0]+dij[1]*dij[1]+dij[2]*dij[2];
-      if(dx < strength) isink[i][ntype-1] = 1;
+      //if(dx < strength) isink[i][ntype-1] = 1; // LC
+      if(dx < range) isink[i] = n;
     }
   }
 }
-*/
+/* ----------------------------------------------------------------------
+  sink_statistics, record the # sites and their ids for each sink
+------------------------------------------------------------------------- */
+//
+// void Appcoros::sink_statistics()
+// { int i,j,maxsite,id;
+//
+//   // Record the sink site ids
+//
+//   maxsite = 0;
+//   memory->create(sinksite,nsink,"app/seg:sinksite"); // # of sink sites for each sink
+//   for(i = 0; i < nsink; i++) {
+//      sinksite[i] = 0;
+//      for(j = 0; j < nlocal; j++) {
+//         if(isink[j] == i+1) sinksite[i] ++; // sink id starts from 1
+//      }
+//      if(sinksite[i] > maxsite) maxsite = sinksite[i];
+//   }
+//
+//   memory->create(sinkid,nsink,maxsite,"app/seg:sinkid"); // ids of each sink site for each sink
+//   for(i = 0; i < nsink; i++) {
+//      id = 0;
+//      for(j = 0; j < nlocal; j++) {
+//         if(isink[j] == i+1) {
+//           sinkid[i][id] = j;
+// 	  id++;
+// 	}
+//      }
+//   }
+//
+//   return;
+// }
 /* ----------------------------------------------------------------------
   calculate dislocation stess field
 ------------------------------------------------------------------------- */
@@ -3232,10 +3586,34 @@ void Appcoros::check_saltdiffusion(double t)
 
   bigint nmix = 0;
   int nsalt = 0;
+  double time_interval = 1e7;
+  if(sectorflag == 0){
+    if (t / time_interval >= temp_salt_time){
+      temp_salt_time ++;
+
+    for(int i = 0; i < nsaltdiffusion; i ++) {
+      if(t/salt_bfreq[i] < 1){  fprintf(screen,"warning:t=%f t/salt_bfreq<1 \n", t);}
+      if(t/salt_bfreq[i] < 1){break;}
+
+       salt_time_new[i] = static_cast<bigint>(t/salt_bfreq[i]); // salt_bfreq = 100 as default
+       nmix = salt_time_new[i] - salt_time_old[i];
+
+       nsalt = count_salt(); // count salt in lattice
+
+       while (nmix) {  //perform mixing nmix times
+         nmix --;
+         potential_diff(nsalt);
+         if(nmix == 0) salt_time_old[i] = salt_time_new[i];  //update time
+       }
+      }
+    }
+  }
+
+
+  if(sectorflag==1){ // for sector setting
   for(int i = 0; i < nsaltdiffusion; i ++) {
     if(t/salt_bfreq[i] < 1){  fprintf(screen,"warning:t=%f t/salt_bfreq<1 \n", t);}
     if(t/salt_bfreq[i] < 1){break;}
-
      salt_time_new[i] = static_cast<bigint>(t/salt_bfreq[i]); // salt_bfreq = 100 as default
      nmix = salt_time_new[i] - salt_time_old[i];
 
@@ -3247,6 +3625,8 @@ void Appcoros::check_saltdiffusion(double t)
        if(nmix == 0) salt_time_old[i] = salt_time_new[i];  //update time
     }
   }
+  }
+
 }
 
 /* ----------------------------------------------------------------------
@@ -3498,6 +3878,39 @@ void Appcoros::concentration_field(double dt)
 }
 
 /* ----------------------------------------------------------------------
+concentration_field for global algorithm
+------------------------------------------------------------------------- */
+void Appcoros::concentration_field_global(double dt)
+{
+  // total occupancy on whole lattice, different (shorter) time interval from site concentration
+  ct_time += dt;
+  ct_new[1] += total_Ni * dt;
+  ct_new[2] += total_vac * dt;
+  ct_new[3] += total_Cr * dt;
+  dt_site_c_new += dt;
+  time_sector += dt;
+
+  double t_interval = 0.0;
+  t_interval = (time_sector - dt ) - ct_site_temp_t[cur_i];
+  ct_site_new[ct_site_temp_i2[cur_i]][cur_i] += t_interval ;  // occupancy
+  site_time[cur_i] += t_interval;
+  if (ct_site_temp_i2[cur_i]==2) {active_vac_new += t_interval;} // active vac
+
+
+  t_interval = (time_sector - dt ) - ct_site_temp_t[cur_j];
+  ct_site_new[ct_site_temp_i2[cur_j]][cur_j] += t_interval ;
+  site_time[cur_j] += t_interval;
+  if (ct_site_temp_i2[cur_j]==2) {active_vac_new += t_interval;} // active vac
+
+  //update temp time, time format
+  ct_site_temp_t[cur_i] = (time_sector - dt );  // update
+  ct_site_temp_t[cur_j] = (time_sector - dt );
+
+  // update, element/i2 type
+  ct_site_temp_i2[cur_i] = element[cur_i]; // update
+  ct_site_temp_i2[cur_j] = element[cur_j];
+}
+/* ----------------------------------------------------------------------
 update site concentration
 by LC
 ------------------------------------------------------------------------- */
@@ -3510,10 +3923,6 @@ void Appcoros::site_concentration_calc(int iset, int nset){
   int last = (iset+1) * nlocal/nset;
   for (j=first;j<last;j++){
     t_interval = dt_site_c_new - ct_site_temp_t[j];
-    // LC test
-    // if(t_interval<0){
-    //   fprintf(screen, "t_interval:%f, dt_site_c_new:%f, ct_site_temp_t[j]:%f\n", t_interval, dt_site_c_new, ct_site_temp_t[j]);
-    // }
 
     ct_site_new[ct_site_temp_i2[j]][j] += t_interval ;
     // site experienced time; !! by LC
@@ -3585,10 +3994,43 @@ use ctNi, ctVac, ctCu as input dump
 ------------------------------------------------------------------------- */
 double **Appcoros::ct_site_extract(){
 
+  // for global setting
+  if (sectorflag ==0){
+    if(dt_site_c_new <= 0){  // for first dump
+      return ct_site;
+    }
+    int i ,j;
+    double t_interval;
+    for (j=0;j<nlocal;j++){
+      t_interval = dt_site_c_new - ct_site_temp_t[j];
+      ct_site_new[ct_site_temp_i2[j]][j] += t_interval ;
+      // site experienced time; !! by LC
+      site_time[j] += t_interval;
+  }
+    fill_n(ct_site_temp_t, nlocal, 0.0); // set whole array to 0
+
+    dt_site_c_new = 0.0; //reset
+    time_sector = 0.0;  // reset
+
+    for(i = 1; i <= nelement; i++) {
+       for(j = 0; j < nlocal; j++) {
+          ct_site[i][j] = ct_site_new[i][j]/site_time[j];
+          ct_site_new[i][j] = 0.0; //recounting
+       }
+    }
+      for (j=0; j<nlocal; j++){
+        site_time[j] = 0.0;
+      }
+    }
+  return ct_site;
+
+  // for sector setting
+  if (sectorflag ==0){
+  int i,j;
   if(site_time_interval[0] <= 0){
     return ct_site;
   }
-  int i,j;
+
 
    for(i = 1; i <= nelement; i++) {
       for(j = 0; j < nlocal; j++) {
@@ -3604,7 +4046,7 @@ double **Appcoros::ct_site_extract(){
  for (j=0; j<nlocal; j++){
    site_time[j] = 0.0;
  }
-
+}
   // LC summation rest of them when compute
 
 
@@ -3880,4 +4322,50 @@ for ( idx = 0 ;idx < nlocal; idx++){
   //
   //   }
 
+}
+
+/* ----------------------------------------------------------------------
+coros info output
+This function will be called when corrosion happend
+this will record the time, Cr position, corrosion rate
+------------------------------------------------------------------------- */
+void Appcoros::corrosion_info_output(int i)
+{
+// i in Cr position id
+// dt as the coros time for corrosion
+  //fprintf(screen, "x,y,z: %f, %f, %f\n", xyz[i][0],xyz[i][1],xyz[i][2]);
+  //fprintf(screen, "time1: %f \n", time);  // --> time point for corrosion event
+  //fprintf(screen, "dt_step1: %f \n", dt_step);  // --> dt_step event for corrosion
+  coros_time[coros_index] = time;
+  coros_id[coros_index] = i;  // position id ~= position
+
+  coros_index ++;
+}
+
+/* ----------------------------------------------------------------------
+coros info dump:
+transform id to position and dump array to one log file
+------------------------------------------------------------------------- */
+void Appcoros::corrosion_info_dump()
+{
+
+  char temp[10];
+  string dumpfilename = "coros_info";
+  //fprintf(screen, "check \n" );
+  //create/open file
+  ofstream file(dumpfilename);
+  string header = "index time x y z\n";
+  file << header;
+  //dump based on atom site
+    for (int i = 0; i < nlocal; i++){
+      //fprintf(screen, "coros_id%d\n",coros_id[i] );
+      if(coros_id[i]==-1) break;
+      file << i << " "
+           << coros_time[i] << " "
+           << xyz[coros_id[i]][0] << " "  // x
+           << xyz[coros_id[i]][1] << " "  // y
+           << xyz[coros_id[i]][2] << " \n";  // z
+    }
+
+    file.close();
 }

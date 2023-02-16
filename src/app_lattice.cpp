@@ -95,6 +95,7 @@ AppLattice::AppLattice(SPPARKS *spk, int narg, char **arg) : App(spk,narg,arg)
   time_check_flag = 0; //LC
   dump_event_flag = 0; // LC
   KMC_stop_flag = 0; //LC
+  coros_flag = 0; // LC
 }
 
 /* ---------------------------------------------------------------------- */
@@ -523,12 +524,15 @@ void AppLattice::iterate_kmc_global(double stoptime)
 
 
 
-    if(ballistic_flag && dt_step > min_bfreq) dt_step = min_bfreq; //Yongfeng, double check later!!!
-    if(frenkelpair_flag && dt_step > min_fpfreq) dt_step = min_fpfreq; //Yongfeng, double check later!!!
+    // if(ballistic_flag && dt_step > min_bfreq) dt_step = min_bfreq; //Yongfeng, double check later!!!
+    // if(frenkelpair_flag && dt_step > min_fpfreq) dt_step = min_fpfreq; //Yongfeng, double check later!!!
     if (isite >= 0) {
       time += dt_step;
+      // LC test
+      //(screen, "time: %f \n", time);  // --> dt_step event for corrosion
+      //fprintf(screen, "dt_step: %f \n", dt_step);  // --> dt_step event for corrosion
       //LC comment temp
-      //if (concentrationflag) concentration_field(dt_step); //yongfeng, integrate concentration every step
+      //if (concentrationflag) concentration_field_global(dt_step); //yongfeng, integrate concentration every step
       if (time_flag) { //yongfeng
          time_tracer(dt_step);
          realtime += dt_step*real_time(time);
@@ -543,6 +547,7 @@ void AppLattice::iterate_kmc_global(double stoptime)
       if (time <= stoptime) {
 	site_event(isite,ranapp);
 	naccept++;
+  if (concentrationflag) concentration_field_global(dt_step);  // LC concentration in global: PD
 
   //LC timing
   if(time_check_flag){
@@ -550,11 +555,11 @@ void AppLattice::iterate_kmc_global(double stoptime)
   time_check = high_resolution_clock::now();
 }
 
-        if (reaction_flag) check_reaction(); //yongfeng
-        if (ballistic_flag) check_ballistic(time); //yongfeng
-        if (frenkelpair_flag) check_frenkelpair(time); //yongfeng
-        if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
-        if (diffusionflag) onsager(time); //yongfeng
+        //if (reaction_flag) check_reaction(); //yongfeng
+        // if (ballistic_flag) check_ballistic(time); //yongfeng
+        // if (frenkelpair_flag) check_frenkelpair(time); //yongfeng
+        // if (sinkmotion_flag) check_sinkmotion(time); //yongfeng
+        // if (diffusionflag) onsager(time); //yongfeng
         if (saltdiffusion_flag) check_saltdiffusion(time); //LC
         //LC timing
         if(time_check_flag){
@@ -583,8 +588,8 @@ void AppLattice::iterate_kmc_global(double stoptime)
       }
     }
 
-    if (clst_flag && (done || time >= nextoutput)) cluster();
-    if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration
+    //if (clst_flag && (done || time >= nextoutput)) cluster(); // LC comment
+    //if (concentrationflag && (done || time >= nextoutput)) time_averaged_concentration(); // calculate time averaged concentration
 
     //LC dump_event list
     if(dump_event_flag){
@@ -593,7 +598,8 @@ void AppLattice::iterate_kmc_global(double stoptime)
     if (done || time >= nextoutput) nextoutput = output->compute(time,done);
 
     timer->stamp(TIME_OUTPUT);
-  }
+  }  // LC note: end of all while loop
+
   //LC timing
   if(time_check_flag){
     end = high_resolution_clock::now();
@@ -603,8 +609,12 @@ void AppLattice::iterate_kmc_global(double stoptime)
   fprintf(screen,"site timing:%e, percentage: %f \n", site_time/1000, (site_time/1000)/(duration_sec/1000)); //unit: CPU sec
   fprintf(screen,"saltdiff timing:%e, percentage: %f\n", saltdiff_time/1000, (saltdiff_time/1000)/(duration_sec/1000)); //unit: CPU sec
 }
-  // restore system solver
 
+  //LC coros_info output
+  if(coros_flag) corrosion_info_dump();
+
+
+  // restore system solver
   solve = hold_solve;
 }
 

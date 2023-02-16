@@ -28,7 +28,7 @@ using namespace SPPARKS_NS;
 enum{inter,floater};                              // data type
 enum{ZERO,FE,VACANCY,CU,NI,MN,Si,P,C,SIA};        // diagnosis terms
 //enum{FE,VACANCY,CU,NI,MN,Si,P,C,SIA};
-enum{hFE=11,hCU,hNI,hMN,hSi,hP,hC};               // hop steps for each element
+
 enum{sink=30};                                    // number of sink absorption
 enum{recombine=41, nmonomer, nmetalpurevac};                               // number of recombination
 enum{monoFE=51, monoVACANCY, monoCU};             // number of mono-particle
@@ -38,6 +38,7 @@ enum{energy=81,treal,fvt, metal_energy};                        // energy and re
 enum{cVAC=91,cFE,cVACANCY,cCU, cCE4, cCE5, cCE6, cCE7, cCE8, activevac}; 	// time averaged concentration
 enum{msdFE=101,msdVACANCY,msdCU};  // MSD calculation by LC
 enum{dFEx=111,dFEy, dFEz,dVACANCYx,dVACANCYy,dVACANCYz,dCUx,dCUy,dCUz};  // MSD calculation by LC
+enum{hFE=121,hCU,hNI,hMN,hSi,hP,hC};               // hop steps for each element
 //!! be careful for the integer and float at line 164 when adding new variables
 /* ---------------------------------------------------------------------- */
 
@@ -186,10 +187,11 @@ void Diagcoros::init()
     else if (strcmp(list[i],"treal") == 0) which[i] = treal;
     else if (strcmp(list[i],"fvt") == 0) which[i] = fvt;
 
-    else if (list[i][0] == 's' && list[i][1] == 'i' && list[i][2] == 'n' && list[i][3] == 'k') {
-      int id = list[i][4] - '0';
-      which[i] = sink + id;
-    }
+    else if (strcmp(list[i],"sink") == 0) which[i] = sink;
+    // else if (list[i][0] == 's' && list[i][1] == 'i' && list[i][2] == 'n' && list[i][3] == 'k') {
+    //   int id = list[i][4] - '0';
+    //   which[i] = sink + id;
+    // }
 
     else error->all(FLERR,"Invalid value setting in diag_style coros");
   }
@@ -220,7 +222,7 @@ void Diagcoros::compute()
 {
   int ninter,nfloater;
   int sites[10],ivalue; // int data
-  bigint nhop[10]; // big int for nhop
+  double nhop[10]; // big int for nhop
   int kvalue; // for number of event
   int nlocal = appcoros->nlocal;
   int nelement = appcoros->nelement;
@@ -252,7 +254,7 @@ void Diagcoros::compute()
   }
 
   if(hopflag) {// hop event of each element
-    for(int i = 1; i < nelement+1; i++) {nhop[i] = 0; nhop[i] = appcoros->hcount[i];}
+    for(int i = 1; i < nelement+1; i++) {nhop[i] = 0.0; nhop[i] = appcoros->hcount[i];}
   }
 
   if(msdflag) {// MSD calculation
@@ -326,12 +328,12 @@ void Diagcoros::compute()
     else if (which[i] == mC) ivalue = monomer_local[C];
     else if (which[i] == mSIA) ivalue = monomer_local[SIA];
     */
-    else if (which[i] == hFE) ivalue = nhop[FE]; //total hop events
-    else if (which[i] == hCU) ivalue = nhop[CU];
-    else if (which[i] == hNI) ivalue = nhop[NI];
-    else if (which[i] == hMN) ivalue = nhop[MN];
-    else if (which[i] == hP) ivalue = nhop[P];
-    else if (which[i] == hC) ivalue = nhop[C];
+    else if (which[i] == hFE) dvalue = nhop[FE]; //total hop events
+    else if (which[i] == hCU) dvalue = nhop[CU];
+    else if (which[i] == hNI) dvalue = nhop[NI];
+    else if (which[i] == hMN) dvalue = nhop[MN];
+    else if (which[i] == hP) dvalue = nhop[P];
+    else if (which[i] == hC) dvalue = nhop[C];
 
     else if (which[i] == dFE && sites[FE] > 0) dvalue = msd[FE]/sites[FE];//MSD
     else if (which[i] == dVACANCY && sites[VACANCY] > 0) dvalue = msd[VACANCY]/sites[VACANCY];
@@ -375,10 +377,12 @@ void Diagcoros::compute()
     else if (which[i] == treal) dvalue = appcoros->realtime; //realistic time
     else if (which[i] == fvt) dvalue = appcoros->fvt; //realistic time
 
-    else if (which[i] > sink && which[i] < recombine) {
-      int id = which[i] - sink;
-      ivalue = appcoros->nabsorption[id-1];
-    }
+    else if (which[i] == sink) ivalue = appcoros->nabsorption[VACANCY][1]; //# of absorption
+    //fprintf(screen, "nabsorption[%d][%d]:%d\n",i,j, nabsorption[VACANCY][i]);
+    // else if (which[i] > sink && which[i] < recombine) {
+    //   int id = which[i] - sink;
+    //   ivalue = appcoros->nabsorption[VACANCY][i];
+    // }
 
     if(which[i] >= dFE) nfloater++;
     else ninter++;

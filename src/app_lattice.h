@@ -81,6 +81,7 @@ class AppLattice : public App {
   virtual double real_time(double) { return 0.0; } //yongfeng
   virtual void time_tracer(double) {} //yongfeng
   virtual void concentration_field(double) {} //yongfeng
+  virtual void concentration_field_global(double) {} //LC
   virtual void time_averaged_concentration() {}; // calculate time-averaged concentration
   virtual void site_concentration_calc(int, int) {}; // LC
   virtual void cluster() {} //yongfeng
@@ -94,6 +95,8 @@ class AppLattice : public App {
 
   virtual double *temp_t_extract(){} // LC
   virtual int *temp_i2_extract(){}   // LC
+
+  virtual void corrosion_info_dump(){} // LC
 
  protected:
   int me,nprocs;
@@ -126,6 +129,7 @@ class AppLattice : public App {
   int KMC_stop_flag;           // by LC
   int dump_event_flag;         // by LC for dump_event function
   int time_check_flag;         // by LC for check time on separate function call
+  int coros_flag;             // by LC for coros_info_output
 
   int sweepflag;               // set if rejection KMC solver
   int sectorflag;              // 1 if partition my domain into sectors

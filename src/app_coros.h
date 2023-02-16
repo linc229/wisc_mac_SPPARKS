@@ -59,7 +59,7 @@ class Appcoros : public AppLattice {
   double **disp; //atomic displacement
   double *mbarrier; //migration barriers
   //double *surfbarrier; //migration barrier for surface diffusion by LC comment 0704
-  bigint *hcount;  // LC change to big int
+  double *hcount;  // LC change to big int
   double *attemptfrequency; // attempt freqency for all diffusion by LC
 
   int nreact; // number of reaction events by LC
@@ -81,12 +81,19 @@ class Appcoros : public AppLattice {
   double c11,c12,c44,dcore;
   double evol[10],cijkl[3][3][3][3];
 
-//oarameter for sinks
-  int nsink,sink_flag;
-  int *sink_type,*sink_shape,*sink_segment,*sink_normal,*nabsorption;
-  int **isink;
-  double *sink_strength,*sink_radius,*sink_mfp;
-  double **xsink;
+//oarameter for sinks // LC comments
+  // int nsink,sink_flag,eisink_flag;
+  // int *sink_type,*sink_shape,*sink_segment,*sink_normal,*nabsorption;
+  // int **isink;
+  // double *sink_strength,*sink_radius,*sink_mfp;
+  // double **xsink;
+
+  //parameter for sinks
+    int nsink,sink_flag,eisink_flag;
+    int *isink,*sink_shape,*sink_segment,*sink_normal,*sinksite;
+    int **nabsorption,**nreserve,**sinkid;
+    double *ci,*sink_range,*sink_radius,*sink_dr,*sink_dt,*sink_dt_new,*sink_dt_old;
+    double **xsink,**eisink,**sink_mfp;
 
 //parameter for reaction
   int nreaction;
@@ -111,6 +118,7 @@ class Appcoros : public AppLattice {
   bigint *salt_time_old,*salt_time_new;
   double *salt_bfreq;
   bigint num_saltdiffusion ; // number of salt diffusion motion
+  int temp_salt_time; // LC
 
 //parameter for acceleration
   int ntrap;
@@ -160,6 +168,12 @@ class Appcoros : public AppLattice {
   int dump_event_all_file;
   int dump_event_all_index;
 
+  // parameters for corrosion_info_output by LC;
+  //int coros_flag;
+  int coros_index;
+  int *coros_id;
+  double *coros_time;
+
 
   //parameter for monomer count by LC
   int *monomers;
@@ -200,6 +214,7 @@ class Appcoros : public AppLattice {
   void check_ballistic(double);
   void ballistic(int);
   void ballistic_probability(int);
+  void absorption(int);
 
   void grow_dislocations(); //dislocation
   void stress_field(int);
@@ -221,10 +236,13 @@ class Appcoros : public AppLattice {
 
   void grow_sinks(); //sink
   void sink_creation(int);
+  void check_sinkmotion(double);
+  void sink_motion(int);
+  void sink_statistics();
 
   int vacancy_trap(int);
   void time_tracer(double); //track time
-  void concentration_field(); //calculation concentration field
+  //void concentration_field(); //calculation concentration field
   double real_time(double); //compute fvt
   //void update_region(int i,int j, int r); // // update type after events
   //int update_neighbor_check(int l); //update and return number of old list
@@ -241,6 +259,7 @@ class Appcoros : public AppLattice {
   int KMC_stop(); //by LC
   int vac_monomer_count(); //by LC
   void concentration_field(double); //calculation concentration field
+  void concentration_field_global(double); //LC for global
   void time_averaged_concentration(); // calculate time-averaged concentration
   void site_concentration_calc(int, int);     // by LC
   void monomer_count();
@@ -256,6 +275,8 @@ class Appcoros : public AppLattice {
   double *temp_t_extract(); // by LC
   int *temp_i2_extract();   // by LC
 
+  void corrosion_info_output(int i);   // by LC
+  void corrosion_info_dump();          // by LC
 };
 
 }
