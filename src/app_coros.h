@@ -146,6 +146,21 @@ class Appcoros : public AppLattice {
   int surface_Ni;
   int surface_Cr;
 
+  int Int_Ni;   // initial Ni ratio / Ni + Cr
+  int Int_Cr;   // initial Cr ration / Ni + Cr
+
+  // parameter for bulk_vac;
+  double* zprofile; // array for storing cvac on z profile; length = z height
+  int z_height;     // heighbt of z distance
+  int xy_sum;       // # of site in x-y cross section
+
+  // parameters for site concentration for diag version
+  double **ct_site_diag, **ct_site_new_diag,dt_site_c_new_diag;
+  double *ct_site_temp_t_diag;  //LC for stoing time point
+  int *ct_site_temp_i2_diag;    //LC for storing i2 at previous time point
+  double time_sector_diag; // LC
+  double *site_time_diag;                  // LC
+
   //parameter for time averaged concentration
     double **ct_site, **ct_site_new, *ct,*ct_new,dt_new, dt_site_c_new;
     double *ct_site_temp_t;  //LC for stoing time point
@@ -161,6 +176,9 @@ class Appcoros : public AppLattice {
     //int ct_reset_flag;
     //int ct_site_flag;
     double **i3_site, **i3_site_new, dt_i3_site_new;
+
+
+
   // parameter for dump_event func by LC
   //int dump_event_flag;
   int dump_index;
@@ -277,6 +295,8 @@ class Appcoros : public AppLattice {
 
   void corrosion_info_output(int i);   // by LC
   void corrosion_info_dump();          // by LC
+  double bulk_cvac();                  // by LC
+  void site_concentration_diag();      // by LC
 };
 
 }

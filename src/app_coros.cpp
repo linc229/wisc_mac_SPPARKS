@@ -178,7 +178,6 @@ Appcoros::Appcoros(SPPARKS *spk, int narg, char **arg) :
 
 
   // corrosion_info_output parameter by LC
-  //coros_flag = 0;
   coros_index = 0;
   coros_time = NULL;
   coros_id = NULL;
@@ -284,6 +283,9 @@ Appcoros::~Appcoros()
     memory->destroy(coros_time);
   }
 
+  // bulk_vac memory by lC
+  memory->destroy(zprofile);
+
 }
 
 /* ----------------------------------------------------------------------
@@ -318,8 +320,15 @@ void Appcoros::input_app(char *command, int narg, char **arg)
     memory->create(site_time_interval,8,"app/coros:site_time_interval");  //LC
 
     memory->create(i3_site,5,nlocal,"app/coros:i3_site"); // LC
-
     memory->create(i3_site_new,5,nlocal,"app/coros:i3_site_new"); // LC
+
+    // diag version array
+    memory->create(ct_site_diag,nelement+1,nlocal,"app/coros:ct_site_diag"); //LC
+    memory->create(ct_site_new_diag,nelement+1,nlocal,"app/coros:ct_site_new_diag");  //LC
+    memory->create(ct_site_temp_t_diag,nlocal,"app/coros:ct_site_temp_t_diag");  //LC
+    memory->create(ct_site_temp_i2_diag,nlocal,"app/coros:ct_site_temp_i2_diag");  //LC
+    memory->create(site_time_diag,nlocal,"app/coros:site_time_diag");  //LC
+
     hcount = new double [nelement+1]; // total numner of switching with a vacancy;
 
     if(narg != nelement*(nelement+1)/2+1) error->all(FLERR,"Illegal ebond command");
@@ -860,16 +869,24 @@ if(concentrationflag) {
     for(j = 0; j < nlocal; j++) {
  ct_site[i][j] = 0.0;
  ct_site_new[i][j] = 0.0;
+ // diag version
+ ct_site_diag[i][j] = 0.0;
+  ct_site_new_diag[i][j] = 0.0;
  //disp[i+ndiff][j] = 0.0;
     }
  }
 
 //LC initiallize initial temp time and i2
 time_sector = 0.0;
+time_sector_diag =0.0;
   for(j = 0; j < nlocal; j++) {
       ct_site_temp_t[j] = 0.0;
       ct_site_temp_i2[j] = element[j];
       site_time[j] = 0.0;
+      ct_site_temp_t_diag[j] = 0.0;
+      ct_site_temp_i2_diag[j] = element[j];
+      site_time_diag[j] = 0.0;
+
 }
   for (j=0; j<8; j++){
 site_time_interval[j] = 0.0;
@@ -912,10 +929,31 @@ if(coros_flag) {  // LC coros info output
     coros_id[i] = -1;
     coros_time[i] = 0.0;
   }
-  //coros_index = 0;
 }
 
 
+// bulk_vac initialization by LC
+int z;
+int temp_z=-1;
+z_height=0;
+xy_sum=0;
+for (i = 0; i < nlocal; i++)
+{
+  // z position: xyz[i][2]
+  z = int(xyz[i][2]*2);  // transfer z axis to 1D profile id
+
+  if (z == 0){xy_sum ++;}  // sum of #site per cross-section
+  if (z > temp_z) {temp_z = z;
+    z_height ++;
+  }
+}
+//fprintf(screen, "temp_z:%d, z_sum:%d, sum:%d\n",temp_z,z_height, sum );
+memory->create(zprofile,z_height,"app:zprofile");
+// 1D flatten: reset
+for (i = 0; i < z_height; i++) // reset profile
+{
+  zprofile[i] = 0.0;
+}
 
 }
 
@@ -957,6 +995,20 @@ void Appcoros::setup_app()
     if (element[i] == CU && sum>0){surface_Cr++;}
   }
   fprintf(screen,"surface_Ni %d surface_Cr %d\n",surface_Ni, surface_Cr );
+
+  //count initial composition for metal by LC:
+  double Ni_ratio = (double(total_Ni)/((double(total_Ni)+double(total_Cr))));
+  double Cr_ratio = (double(total_Cr)/((double(total_Ni)+double(total_Cr))));
+
+  // unit conversion, round up and convert to int
+  Ni_ratio = int(Ni_ratio*100 + .5);
+  Ni_ratio = (Ni_ratio)/100;
+  Cr_ratio = int(Cr_ratio*100 + .5);
+  Cr_ratio = (Cr_ratio)/100;
+
+  Int_Ni = int(Ni_ratio *100);
+  Int_Cr = int(Cr_ratio * 100);
+  fprintf(screen,"initial Ni %d Cr %d \n",Int_Ni, Int_Cr );
 }
 
 /* ----------------------------------------------------------------------
@@ -1935,7 +1987,8 @@ void Appcoros::absorption(int i)
          //rand_me = static_cast<int>(rancoros->uniform()*nlocal); // LC note: incorrect
          rand_me = static_cast<int>(rancoros->uniform()*100);
          //fprintf(screen, "rand_me: %d\n", rand_me);
-         if (rand_me > 80){temp_element = 1;}
+         // change the rand_me setting for initial Ni composition and threshold
+         if (rand_me <= Int_Ni){temp_element = 1;}
          else{temp_element = 3;}
          ejd = temp_element;
          //fprintf(screen, "ejd: %d\n", ejd);
@@ -2073,9 +2126,6 @@ double Appcoros::total_energy( )
 
   penergy += sites_energy(i,engstyle);
 
-  // print every site energy
-  //fprintf(screen,"id: %d particle type: %d site_energy: %f penergy: %f \n",i, element[i],sites_energy(i,engstyle),penergy/2);
-  //fprintf(screen,"id: %d particle type: %d\n",i+1, element[i]);
   }
 /*
   if(elastic_flag) {
@@ -2085,7 +2135,9 @@ double Appcoros::total_energy( )
     }
   }
 */
-  //fprintf(screen,"sector_flag: %d\n", sectorflag); //LC test
+
+
+
 
   return penergy/2.0;
 }
@@ -3890,28 +3942,52 @@ void Appcoros::concentration_field_global(double dt)
   dt_site_c_new += dt;
   time_sector += dt;
 
+  // parameter for diag version
+  time_sector_diag += dt;
+  dt_site_c_new_diag += dt;
+
   double t_interval = 0.0;
+  double t_interval_diag = 0.0;
   t_interval = (time_sector - dt ) - ct_site_temp_t[cur_i];
   ct_site_new[ct_site_temp_i2[cur_i]][cur_i] += t_interval ;  // occupancy
   site_time[cur_i] += t_interval;
+  // diag version:
+  t_interval_diag = (time_sector_diag - dt ) - ct_site_temp_t_diag[cur_i];
+  ct_site_new_diag[ct_site_temp_i2_diag[cur_i]][cur_i] += t_interval_diag ;  // occupancy
+  site_time_diag[cur_i] += t_interval_diag;
   if (ct_site_temp_i2[cur_i]==2) {active_vac_new += t_interval;} // active vac
 
 
   t_interval = (time_sector - dt ) - ct_site_temp_t[cur_j];
   ct_site_new[ct_site_temp_i2[cur_j]][cur_j] += t_interval ;
   site_time[cur_j] += t_interval;
+  // diag version:
+  t_interval_diag = (time_sector_diag - dt ) - ct_site_temp_t_diag[cur_j];
+  ct_site_new_diag[ct_site_temp_i2_diag[cur_j]][cur_j] += t_interval_diag ;  // occupancy
+  site_time_diag[cur_j] += t_interval_diag;
+
   if (ct_site_temp_i2[cur_j]==2) {active_vac_new += t_interval;} // active vac
 
   //update temp time, time format
-  ct_site_temp_t[cur_i] = (time_sector - dt );  // update
+  ct_site_temp_t[cur_i] = (time_sector - dt );
   ct_site_temp_t[cur_j] = (time_sector - dt );
+
+  // diag version update
+  ct_site_temp_t_diag[cur_i] = (time_sector_diag - dt );
+  ct_site_temp_t_diag[cur_j] = (time_sector_diag - dt );
 
   // update, element/i2 type
   ct_site_temp_i2[cur_i] = element[cur_i]; // update
   ct_site_temp_i2[cur_j] = element[cur_j];
+
+  // diag version update
+  ct_site_temp_i2_diag[cur_i] = element[cur_i]; // update
+  ct_site_temp_i2_diag[cur_j] = element[cur_j];
+
 }
 /* ----------------------------------------------------------------------
 update site concentration
+for sector setting
 by LC
 ------------------------------------------------------------------------- */
 void Appcoros::site_concentration_calc(int iset, int nset){
@@ -4025,7 +4101,7 @@ double **Appcoros::ct_site_extract(){
   return ct_site;
 
   // for sector setting
-  if (sectorflag ==0){
+  if (sectorflag ==1){
   int i,j;
   if(site_time_interval[0] <= 0){
     return ct_site;
@@ -4368,4 +4444,111 @@ void Appcoros::corrosion_info_dump()
     }
 
     file.close();
+}
+
+/* ----------------------------------------------------------------------
+diag_site concentration
+this site concentration is compute to bulk_cvac
+this only work for global(no sector)
+it may affect the efficiency -> need to check
+------------------------------------------------------------------------- */
+void Appcoros::site_concentration_diag()
+{
+  // for global setting
+
+    int i ,j;
+    double t_interval_diag;
+    for (j=0;j<nlocal;j++){
+      t_interval_diag = dt_site_c_new_diag - ct_site_temp_t_diag[j];
+      ct_site_new_diag[ct_site_temp_i2_diag[j]][j] += t_interval_diag ;
+      site_time_diag[j] += t_interval_diag;
+  }
+    fill_n(ct_site_temp_t_diag, nlocal, 0.0); // set whole array to 0
+
+    dt_site_c_new_diag = 0.0; //reset
+    time_sector_diag = 0.0;  // reset
+
+    for(i = 1; i <= nelement; i++) {
+       for(j = 0; j < nlocal; j++) {
+          ct_site_diag[i][j] = ct_site_new_diag[i][j]/site_time_diag[j];
+          ct_site_new_diag[i][j] = 0.0; //recounting
+       }
+    }
+      for (j=0; j<nlocal; j++){
+        site_time_diag[j] = 0.0;
+      }
+
+  //return ct_site_diag;
+
+}
+
+/* ----------------------------------------------------------------------
+bulk_cvac
+this function call extract site concentration to compute bulk cvac
+by determining the interface
+this process will flatten/average the site concentration into 1D for process
+------------------------------------------------------------------------- */
+double Appcoros::bulk_cvac()
+{
+  if(dt_site_c_new_diag > 0){  // for first dump
+    site_concentration_diag();  // update site concentration first;
+  }
+
+  double bulk_cvac;
+  int i, z;
+  int temp_Cr_pos = -1;
+  // reset profile
+  for (i = 0; i < z_height; i++)
+  {
+    zprofile[i] = 0.0;
+  }
+
+  for (i = 0; i < nlocal; i++)
+  {
+    // z axis: xyz[i][2]
+    //ct_site[i][j] : i for element, j for site_id
+    //ct_site[2][i]
+    z = int(xyz[i][2]*2);  // transfer z axis to 1D profile id
+    zprofile[z] += ct_site_diag[2][i];
+    if (element[i] == 1 && z > temp_Cr_pos){
+      temp_Cr_pos = z;
+    }
+
+  }
+
+
+  // find interface point from profile by mininum point for Cvac
+  // create cvac profile along z
+  for (i = 0; i < z_height; i++)
+  {
+    zprofile[i] = zprofile[i] / xy_sum ;
+    //fprintf(screen, "zprofile[%d]: %e\n",i,  zprofile[i]);
+  }
+  // find interface
+
+  // method 1 find mininum site vac concentration
+  int min_pos=-1;
+  double min = 1.0;
+  for (i = int(z_height*0.8); i < z_height; i++){
+    if (zprofile[i] < min && zprofile[i] >0.0){
+      min = zprofile[i];
+      min_pos = i;
+    }
+  }
+  fprintf(screen, "min_pos:%d, min:%e\n", min_pos, min );
+
+  // method 2: find maximum Cr site as interface
+  temp_Cr_pos = temp_Cr_pos -1; // LC test
+  fprintf(screen, "Cr_pos:%d\n", temp_Cr_pos);
+  // summation all site vac concentration to the height of interface as bulk Cvac
+  int temp_sum=0;
+  for (i = 0; i < temp_Cr_pos; i++)
+  {
+    bulk_cvac =+ zprofile[i];
+    temp_sum ++;
+  }
+
+  bulk_cvac = bulk_cvac / temp_sum;
+  fprintf(screen, "bulk_cvac %e\n", bulk_cvac);
+  return bulk_cvac;
 }
