@@ -6,3 +6,7 @@ The original framework: https://github.com/spparks/spparks
 ---------------------------------------------------------------------
 This updated version is designed for corrosion kinetics study.
 The developer of updated version: Lin-Chieh Yu, Yongfeng Zhang from University of Wisconsin - Madison
+Please contact: lyu229@wisc.edu
+
+
+Install
